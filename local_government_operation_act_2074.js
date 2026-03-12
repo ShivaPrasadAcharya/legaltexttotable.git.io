@@ -1,15 +1,15 @@
-window.lawSampleAct = {
+window.lawLocalGovernmentOperationAct = {
 
 metadata: {
-  id: "sample_act",
+  id: "local_governement_act",
 
-  title_np: "१.नमूना ऐन",
+  title_np: "स्थानीय निकाय सञ्चालन ऐन, २०७४",
   title_en: "Sample Act",
 
-  short_title: "Sample Act",
+  short_title: "Local Gorvernment Operation Act",
 
   law_type: "Act",
-  category: "Procedural",
+  category: "Substantive",
 
   jurisdiction: "Nepal",
 
@@ -22,27 +22,20 @@ metadata: {
   effective_date_bs: "",
   effective_date_ad: "",
 
-  amendment_history: [
-    "गणतन्त्र सुदृढीकरण तथा केही नेपाल कानून संशोधन गर्ने ऐन, २०६६",
-    "दोस्रो संशोधन"
-  ],
-
-  language: "Nepali",
+    language: "Nepali",
 
   source: "Nepal Law Commission",
   official_url: "",
 
   version: "1.0",
-  last_updated: "2026-03-10",
+  last_updated: "2026-03-12",
 
   keywords: [
-    "sample",
-    "proof",
-    "presumption",
-    "court procedure"
+    "local governance"
+    
   ],
 
-  description: "नमूना कानून",
+  description: "स्थानीय सरकार संचालन कानून, २०७४",
 
   status: "Active"
 },
