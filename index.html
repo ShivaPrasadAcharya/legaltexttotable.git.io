@@ -1,0 +1,2549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LexParse — Legal Text Parser</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet"/>
+<style>
+/* ── Reset & Root ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#1a1209;
+  --paper:#f7f2e8;
+  --parchment:#ede5d0;
+  --gold:#9a7214;
+  --gold-light:#c8a84b;
+  --gold-dim:rgba(154,114,20,.11);
+  --red:#7a1818;
+  --muted:#8a7a62;
+  --border:#cbbda0;
+  --border-light:#ddd4c0;
+  --code-bg:#16130d;
+  --code-text:#d4c49a;
+  --amend:#9a4f00;
+  --nav-w:220px;
+  --header-h:52px;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--paper);color:var(--ink);font-family:'Libre Baskerville',Georgia,serif;display:flex;flex-direction:column}
+
+/* ── Header ── */
+header{
+  height:var(--header-h);min-height:var(--header-h);flex-shrink:0;
+  display:flex;align-items:center;padding:0 1.4rem;gap:.8rem;
+  background:var(--parchment);border-bottom:2px solid var(--border);
+  box-shadow:0 1px 5px rgba(0,0,0,.07);z-index:100;
+}
+.logo{font-family:'Playfair Display',serif;font-size:1.5rem;letter-spacing:-.02em;white-space:nowrap}
+.logo span{color:var(--gold)}
+.logo-sub{font-family:'JetBrains Mono',monospace;font-size:.54rem;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;align-self:flex-end;padding-bottom:3px;margin-left:.5rem}
+.header-actions{margin-left:auto;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+.hbtn{font-family:'JetBrains Mono',monospace;font-size:.61rem;letter-spacing:.07em;text-transform:uppercase;padding:.28rem .7rem;border-radius:2px;cursor:pointer;transition:all .15s;border:1.5px solid var(--border);background:transparent;color:var(--muted);white-space:nowrap}
+.hbtn:hover,.hbtn.active{border-color:var(--gold);color:var(--gold);background:var(--gold-dim)}
+.hbtn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.hbtn.primary:hover{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+.copy-ok{font-size:.65rem;color:#4a8a4a;opacity:0;transition:opacity .3s;margin-left:.2rem}
+.copy-ok.show{opacity:1}
+
+/* ── App layout: nav | work ── */
+.app{display:flex;flex:1;min-height:0}
+
+/* ── Left nav panel ── */
+.nav-panel{
+  width:var(--nav-w);min-width:var(--nav-w);flex-shrink:0;
+  background:var(--parchment);border-right:2px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.nav-section{
+  padding:.6rem .9rem .35rem;flex-shrink:0;
+  font-family:'JetBrains Mono',monospace;font-size:.54rem;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--gold);border-bottom:1px solid var(--border-light);
+  display:flex;align-items:center;gap:.45rem;
+}
+.nav-section::before{content:'';width:6px;height:6px;flex-shrink:0;background:var(--gold);clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)}
+.outline-scroll{flex:1;overflow-y:auto;padding:.25rem 0}
+.outline-empty{font-family:'JetBrains Mono',monospace;font-size:.63rem;color:var(--muted);padding:1.2rem .9rem;font-style:italic;line-height:1.7}
+.outline-list{list-style:none;padding:.15rem 0}
+
+/* Outline items — all single-line */
+.outline-item{
+  display:flex;align-items:center;gap:0;
+  padding:.28rem .75rem .28rem .65rem;
+  cursor:pointer;border-left:3px solid transparent;
+  transition:background .12s,border-color .12s;
+  overflow:hidden;white-space:nowrap;
+}
+.outline-item:hover{background:var(--gold-dim);border-left-color:var(--border-light)}
+.outline-item.active{background:rgba(154,114,20,.15);border-left-color:var(--gold)}
+.outline-id{font-family:'JetBrains Mono',monospace;font-size:.59rem;font-weight:600;color:var(--gold);flex-shrink:0;letter-spacing:.03em}
+.outline-sep{font-family:'JetBrains Mono',monospace;font-size:.52rem;color:var(--border);flex-shrink:0;padding:0 .15rem}
+.outline-title{font-family:'Libre Baskerville',serif;font-size:.65rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;min-width:0}
+
+/* Chapter items in outline */
+.outline-item.chapter{background:rgba(154,114,20,.07);border-left-color:rgba(154,114,20,.4);margin:.15rem 0;border-radius:0 2px 2px 0}
+.outline-item.chapter:hover{background:rgba(154,114,20,.13);border-left-color:var(--gold)}
+.outline-item.chapter .outline-id{color:var(--gold);font-size:.6rem}
+.outline-item.chapter .outline-title{font-weight:600;font-family:'Libre Baskerville',serif}
+/* Preamble item */
+.outline-item.preamble .outline-id{color:#7a6aad}
+.outline-item.preamble .outline-title{font-style:italic;color:var(--muted)}
+/* Annex item */
+.outline-item.annex .outline-id{color:var(--amend)}
+.outline-item.annex .outline-title{font-style:italic}
+
+/* ── Work area (right side) ── */
+.work-area{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Input panel (slides down from top) ── */
+.input-panel{
+  background:var(--parchment);border-bottom:2px solid var(--border);
+  flex-shrink:0;overflow:hidden;
+  max-height:0;transition:max-height .35s cubic-bezier(.4,0,.2,1);
+}
+.input-panel.open{max-height:480px}
+.input-inner{display:flex;flex-direction:column;gap:.55rem;padding:.85rem 1.1rem;overflow-y:auto;max-height:478px}
+.schema-box{background:rgba(255,255,255,.5);border:1px solid var(--border-light);border-radius:2px;padding:.45rem .8rem;font-size:.74rem;line-height:1.7;display:flex;gap:1rem;flex-wrap:wrap}
+.schema-box code{font-family:'JetBrains Mono',monospace;background:rgba(154,114,20,.1);padding:0 3px;border-radius:2px;font-size:.75em;color:var(--red)}
+.schema-note{font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--amend);border-left:2px solid var(--amend);padding-left:.5rem}
+.input-topbar{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+.sample-group{display:flex;gap:.28rem;flex-wrap:wrap;flex:1}
+.btn-sample{font-family:'JetBrains Mono',monospace;font-size:.59rem;padding:.26rem .58rem;border-radius:2px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .12s;white-space:nowrap}
+.btn-sample:hover,.btn-sample.active{border-color:var(--gold);color:var(--gold);background:var(--gold-dim)}
+.btn-sample.np{border-color:#7a6aad44;color:#8a7ac0}
+.btn-sample.np:hover,.btn-sample.np.active{border-color:#7a6aad;color:#6a5aad;background:rgba(106,90,173,.07)}
+/* Law Files Dropdown */
+.law-files-group{display:flex;gap:.38rem;align-items:center;flex-wrap:wrap}
+.law-files-label{font-family:'JetBrains Mono',monospace;font-size:.57rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;white-space:nowrap;align-self:center}
+#lawFileSelect{font-family:'JetBrains Mono',monospace;font-size:.62rem;padding:.32rem .58rem;border:1.5px solid var(--border);background:white;color:var(--ink);border-radius:2px;cursor:pointer;outline:none;transition:all .12s;max-width:280px}
+#lawFileSelect:hover{border-color:var(--gold);background:rgba(154,114,20,.02)}
+#lawFileSelect:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(154,114,20,.1)}
+#lawFileSelect option{padding:.28rem .4rem;color:var(--ink);background:white}
+.drop-zone{border:2px dashed var(--border);border-radius:3px;padding:.45rem 1rem;text-align:center;color:var(--muted);font-size:.71rem;font-family:'JetBrains Mono',monospace;cursor:default;transition:all .2s}
+.drop-zone.drag-over{border-color:var(--gold);background:var(--gold-dim)}
+.file-label{color:var(--gold);cursor:pointer;text-decoration:underline dotted;font-style:italic}
+textarea#inputText{min-height:155px;max-height:210px;background:white;border:1.5px solid var(--border);border-radius:2px;padding:.7rem .9rem;font-family:'Libre Baskerville',serif;font-size:.81rem;line-height:1.8;color:var(--ink);resize:vertical;outline:none;transition:border-color .2s;width:100%}
+textarea#inputText:focus{border-color:var(--gold)}
+textarea#inputText::placeholder{color:var(--muted);font-style:italic;font-size:.77rem}
+.input-actions{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap}
+/* ── Input mode tabs ── */
+.input-mode-bar{display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
+.inp-tab{
+  font-family:'JetBrains Mono',monospace;font-size:.62rem;font-weight:500;
+  padding:3px 10px;border-radius:3px 3px 0 0;cursor:pointer;
+  border:1px solid rgba(154,114,20,.25);border-bottom:none;
+  background:rgba(154,114,20,.04);color:var(--muted);
+  transition:background .12s,color .12s;
+}
+.inp-tab:hover{background:rgba(154,114,20,.1);color:var(--ink);}
+.inp-tab.active{background:var(--gold);color:#fff;border-color:var(--gold);font-weight:700;}
+.inp-mode-hint{font-family:'JetBrains Mono',monospace;font-size:.59rem;color:var(--muted);margin-left:6px;font-style:italic;}
+/* ── Input history bar ── */
+.inp-history-bar{
+  display:none;flex-wrap:wrap;align-items:center;gap:5px;
+  padding:4px 0 2px;border-top:1px solid rgba(154,114,20,.12);
+}
+.inp-history-label{font-family:'JetBrains Mono',monospace;font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);flex-shrink:0;}
+.inp-history-pills{display:flex;flex-wrap:wrap;gap:4px;flex:1;min-width:0;}
+.inp-hist-pill{
+  display:flex;align-items:center;gap:4px;padding:2px 8px 2px 4px;border-radius:12px;cursor:pointer;
+  border:1px solid rgba(154,114,20,.25);background:rgba(154,114,20,.05);
+  font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--muted);
+  max-width:220px;transition:all .14s;
+}
+.inp-hist-pill:hover{background:rgba(154,114,20,.14);border-color:var(--gold);color:var(--ink);}
+.inp-hist-pill.json-pill{border-color:rgba(60,140,200,.3);background:rgba(60,140,200,.05);}
+.inp-hist-pill.json-pill:hover{background:rgba(60,140,200,.12);border-color:#3c8cc8;color:var(--ink);}
+.pill-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:14px;border-radius:3px;flex-shrink:0;font-size:.53rem;font-weight:700;
+  background:rgba(154,114,20,.18);color:var(--gold);
+}
+.inp-hist-pill.json-pill .pill-badge{background:rgba(60,140,200,.18);color:#3c8cc8;}
+.pill-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;}
+.inp-history-clear{background:none;border:none;color:var(--muted);font-size:.65rem;cursor:pointer;padding:1px 4px;border-radius:2px;flex-shrink:0;transition:color .12s;}
+.inp-history-clear:hover{color:var(--ink);}
+
+.status-hint{font-family:'JetBrains Mono',monospace;font-size:.61rem;color:var(--muted);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px}
+
+/* ── Output area ── */
+.output-area{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+
+/* Output toolbar */
+.output-bar{display:flex;align-items:center;gap:.45rem;padding:.5rem 1.1rem;border-bottom:1.5px solid var(--border-light);background:var(--paper);flex-shrink:0;flex-wrap:wrap}
+.output-tabs{display:flex}
+.tab{font-family:'JetBrains Mono',monospace;font-size:.61rem;letter-spacing:.1em;text-transform:uppercase;padding:.28rem .82rem;cursor:pointer;border:1.5px solid var(--border);background:transparent;color:var(--muted);transition:all .12s;margin-right:-1px}
+.tab:first-child{border-radius:2px 0 0 2px}
+.tab:last-child{border-radius:0 2px 2px 0}
+.tab.active{background:var(--ink);color:var(--paper);border-color:var(--ink);z-index:1}
+.tab:hover:not(.active){border-color:var(--gold);color:var(--gold)}
+.toolbar-right{margin-left:auto;display:flex;gap:.38rem;align-items:center;flex-wrap:wrap}
+.btn-icon{background:none;border:1.5px solid var(--border);border-radius:2px;width:26px;height:26px;cursor:pointer;font-size:.82rem;color:var(--muted);line-height:1;padding:0;transition:all .12s}
+.btn-icon:hover{border-color:var(--gold);color:var(--gold)}
+.btn-sm{font-family:'JetBrains Mono',monospace;font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;padding:.26rem .58rem;height:26px;border-radius:2px;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .12s}
+.btn-sm:hover{border-color:var(--gold);color:var(--gold)}
+
+/* Add-row bar */
+.add-row-bar{display:flex;gap:.42rem;align-items:center;padding:.42rem 1.1rem;border-bottom:1px solid var(--border-light);flex-shrink:0}
+.add-row-bar input{font-family:'JetBrains Mono',monospace;font-size:.7rem;border:1.5px solid var(--border);background:var(--paper);padding:.28rem .62rem;color:var(--ink);width:148px;outline:none;border-radius:2px}
+.add-row-bar input:focus{border-color:var(--gold)}
+
+/* ── Table ── */
+.output-view{display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden}
+.output-view.active{display:flex}
+.table-wrap{overflow:auto;flex:1}
+
+table#mainTable{width:100%;border-collapse:collapse;font-size:.79rem;table-layout:fixed}
+#mainTable thead{position:sticky;top:0;z-index:10}
+#mainTable thead tr{background:var(--ink);color:var(--paper)}
+#mainTable th{padding:.48rem .6rem;text-align:left;font-family:'JetBrains Mono',monospace;font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;font-weight:500}
+#mainTable th:nth-child(1){width:34px}
+#mainTable th:nth-child(2){width:86px}
+#mainTable th:nth-child(3){width:auto}
+#mainTable th:nth-child(4){width:22%}
+#mainTable th:nth-child(5){width:11%}
+#mainTable th:nth-child(6){width:28px}
+#mainTable tbody tr{border-bottom:1px solid rgba(203,189,160,.28);cursor:pointer;transition:background .1s}
+#mainTable tbody tr:hover{background:rgba(154,114,20,.05)}
+#mainTable tbody tr.selected-row{background:rgba(154,114,20,.13)!important;outline:1.5px solid var(--gold);outline-offset:-1px}
+#mainTable tbody tr.filtered-hide{display:none}
+#mainTable tbody tr.has-amend td:first-child::after{content:'⊕';font-size:.57rem;color:var(--amend);margin-left:2px;vertical-align:super}
+#mainTable td{padding:.3rem .55rem;vertical-align:top}
+.row-num{font-size:.59rem;color:var(--muted);font-family:'JetBrains Mono',monospace;text-align:center;display:block;padding-top:.3rem;user-select:none}
+#mainTable td input,#mainTable td textarea{width:100%;border:1px solid transparent;background:transparent;font-family:inherit;font-size:inherit;color:var(--ink);padding:1px 3px;border-radius:2px;resize:none;min-height:20px;line-height:1.55;outline:none}
+#mainTable td input:focus,#mainTable td textarea:focus{border-color:var(--gold);background:rgba(154,114,20,.04)}
+#mainTable td:nth-child(2) input{font-family:'JetBrains Mono',monospace;font-size:.71rem;font-weight:600;color:var(--gold)}
+#mainTable td:nth-child(4) textarea{font-family:'JetBrains Mono',monospace;font-size:.64rem;color:var(--muted)}
+#mainTable td:nth-child(5) input{font-family:'JetBrains Mono',monospace;font-size:.64rem;color:var(--muted)}
+.del-row{font-family:'JetBrains Mono',monospace;font-size:.59rem;color:var(--red);background:none;border:none;cursor:pointer;padding:2px 4px;opacity:.2;transition:opacity .12s}
+.del-row:hover{opacity:1}
+.table-empty{text-align:center;color:var(--muted);font-style:italic;padding:3.5rem 1rem;font-family:'JetBrains Mono',monospace;font-size:.7rem}
+
+/* ── Chapter band in table ── */
+#mainTable tr.chapter-row td{padding:0}
+.chapter-band{
+  display:flex;align-items:center;gap:.65rem;padding:.4rem 1rem;
+  background:linear-gradient(90deg,rgba(154,114,20,.13) 0%,rgba(154,114,20,.03) 100%);
+  border-top:2px solid var(--gold);border-bottom:1px solid rgba(154,114,20,.22);
+}
+.chapter-num{font-family:'JetBrains Mono',monospace;font-size:.63rem;font-weight:600;color:var(--gold);letter-spacing:.05em;white-space:nowrap;flex-shrink:0}
+.chapter-name{font-family:'Libre Baskerville',serif;font-size:.78rem;font-weight:700;color:var(--ink)}
+
+/* ── Search bar ── */
+.search-bar{
+  display:flex;align-items:center;gap:3px;
+  padding:4px 8px;
+  background:rgba(154,114,20,.06);
+  border-top:1px solid rgba(154,114,20,.15);
+  border-bottom:1px solid rgba(154,114,20,.15);
+  flex-shrink:0;
+}
+.search-icon{font-size:1.05rem;color:var(--gold);opacity:.75;margin-right:1px;line-height:1;user-select:none}
+#searchInput{
+  flex:1;min-width:80px;border:none;background:transparent;
+  font-family:'JetBrains Mono',monospace;font-size:.72rem;
+  color:var(--ink);outline:none;padding:2px 4px;
+}
+#searchInput::placeholder{color:var(--muted)}
+.search-count{
+  font-family:'JetBrains Mono',monospace;font-size:.63rem;
+  color:var(--muted);white-space:nowrap;min-width:48px;text-align:right;padding-right:1px;
+}
+.search-count.has-results{color:var(--gold);font-weight:600}
+.search-count.no-results{color:#b03030}
+.search-nav{
+  background:none;border:1px solid rgba(154,114,20,.28);border-radius:3px;
+  color:var(--gold);font-size:.92rem;line-height:1;padding:1px 6px;cursor:pointer;
+  transition:background .12s;font-weight:700;
+}
+.search-nav:hover:not(:disabled){background:rgba(154,114,20,.15)}
+.search-nav:disabled{opacity:.28;cursor:default}
+.search-clear{
+  background:none;border:none;color:var(--muted);font-size:.7rem;
+  cursor:pointer;padding:2px 4px;border-radius:2px;transition:color .12s;line-height:1;
+}
+.search-clear:hover{color:var(--ink)}
+.search-divider{
+  width:1px;height:16px;background:rgba(154,114,20,.22);
+  margin:0 2px;flex-shrink:0;
+}
+/* ⋮ button */
+.search-opt-btn{
+  background:none;border:1px solid rgba(154,114,20,.28);border-radius:3px;
+  color:var(--gold);font-size:.9rem;line-height:1;padding:1px 5px;cursor:pointer;
+  transition:background .12s,color .12s;font-weight:700;letter-spacing:.05em;
+}
+.search-opt-btn:hover,.search-opt-btn.active{
+  background:rgba(154,114,20,.14);border-color:var(--gold);
+}
+/* Reset button */
+.search-reset-btn{
+  background:none;border:1px solid rgba(154,114,20,.22);border-radius:3px;
+  color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.6rem;
+  padding:2px 6px;cursor:pointer;transition:all .12s;white-space:nowrap;
+}
+.search-reset-btn:hover{background:rgba(154,114,20,.1);color:var(--ink);border-color:var(--gold);}
+
+/* Search options panel */
+.search-opts-panel{
+  display:none;flex-wrap:wrap;gap:2px;align-items:center;
+  padding:5px 10px;
+  background:rgba(154,114,20,.05);
+  border-bottom:1px solid rgba(154,114,20,.13);
+  flex-shrink:0;
+}
+/* Checkbox option label */
+.search-opt{
+  display:flex;align-items:center;gap:3px;cursor:pointer;
+  font-family:'JetBrains Mono',monospace;font-size:.62rem;
+  color:var(--muted);user-select:none;white-space:nowrap;
+  padding:2px 7px;border-radius:3px;
+  border:1px solid rgba(154,114,20,.18);
+  transition:background .12s,color .12s,border-color .12s;
+}
+.search-opt:hover{background:rgba(154,114,20,.1);color:var(--ink);border-color:rgba(154,114,20,.4);}
+.search-opt input[type=checkbox]{
+  accent-color:var(--gold);width:11px;height:11px;cursor:pointer;margin:0;
+}
+.search-opt input[type=checkbox]:checked+span{color:var(--gold);font-weight:600}
+
+/* ── Search match highlights ── */
+mark.sh{
+  background:rgba(255,215,50,.6);color:inherit;
+  border-radius:2px;padding:0 1px;
+}
+tr.sh-cur-row mark.sh{
+  background:rgba(245,138,5,.82);
+  outline:1.5px solid rgba(200,100,0,.45);
+}
+/* Matched row styles */
+tr.sh-match-row{cursor:pointer}
+tr.sh-match-row>td{
+  padding:.35rem .55rem;
+  background:rgba(255,225,60,.08)!important;
+  vertical-align:top;
+}
+tr.sh-cur-row>td{background:rgba(255,185,20,.2)!important}
+tr.sh-match-row:hover>td{background:rgba(255,205,40,.14)!important}
+.sh-cell-text{display:block;white-space:pre-wrap;word-break:break-word;font-size:.79rem;line-height:1.5;color:var(--ink);}
+.sh-pre-wrap{white-space:pre-wrap;font-size:.75rem;line-height:1.5;color:var(--ink);max-height:120px;overflow-y:auto;}
+.sh-mono{font-family:'JetBrains Mono',monospace!important;}
+.sh-muted{color:var(--muted)!important;}
+.sh-id{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:.74rem;font-weight:600;color:var(--gold);}
+tr.sh-match-row td:first-child::after{
+  content:'↵';font-size:.52rem;color:var(--muted);opacity:.4;display:block;text-align:center;margin-top:2px;
+}
+
+/* ── Nav panel search ── */
+.nav-search-bar{
+  display:flex;align-items:center;gap:2px;
+  padding:4px 6px;
+  background:rgba(154,114,20,.05);
+  border-bottom:1px solid rgba(154,114,20,.13);
+  flex-shrink:0;
+}
+.nav-search-icon{font-size:.95rem;color:var(--gold);opacity:.65;line-height:1;flex-shrink:0;margin-right:1px;}
+#navSearchInput{
+  flex:1;min-width:0;border:none;background:transparent;
+  font-family:'JetBrains Mono',monospace;font-size:.64rem;
+  color:var(--ink);outline:none;padding:1px 3px;
+}
+#navSearchInput::placeholder{color:var(--muted);font-size:.62rem;}
+.nav-search-count{
+  font-family:'JetBrains Mono',monospace;font-size:.58rem;
+  white-space:nowrap;min-width:34px;text-align:right;
+  color:var(--muted);
+}
+.nav-search-count.has-results{color:var(--gold);font-weight:600}
+.nav-search-count.no-results{color:#b03030}
+.nav-snav{
+  background:none;border:1px solid rgba(154,114,20,.25);border-radius:2px;
+  color:var(--gold);font-size:.82rem;line-height:1;padding:0px 4px;cursor:pointer;
+  font-weight:700;transition:background .12s;
+}
+.nav-snav:hover:not(:disabled){background:rgba(154,114,20,.15)}
+.nav-snav:disabled{opacity:.25;cursor:default}
+.nav-sclear{
+  background:none;border:none;color:var(--muted);font-size:.65rem;
+  cursor:pointer;padding:1px 3px;border-radius:2px;transition:color .12s;line-height:1;
+}
+.nav-sclear:hover{color:var(--ink)}
+/* Nav opts row */
+.nav-opts-row{
+  display:flex;align-items:center;gap:3px;
+  padding:2px 6px 3px;
+  border-bottom:1px solid rgba(154,114,20,.1);
+  flex-shrink:0;
+}
+/* Nav opts panel */
+.nav-opts-panel{
+  display:none;flex-wrap:wrap;gap:3px;align-items:center;
+  padding:4px 6px;
+  background:rgba(154,114,20,.04);
+  border-bottom:1px solid rgba(154,114,20,.12);
+  flex-shrink:0;
+}
+/* Nav current match highlight */
+li.outline-item.ns-cur{
+  background:rgba(255,185,20,.25)!important;
+  border-left:2px solid var(--gold);
+}
+li.outline-item.ns-cur mark.sh{
+  background:rgba(245,138,5,.82);
+  outline:1.5px solid rgba(200,100,0,.45);
+}
+
+/* ── Section heading rows ── */
+#mainTable tr.heading-row td{ background:rgba(154,114,20,.05); }
+#mainTable tr.heading-row td:nth-child(2) input{ font-weight:700; letter-spacing:.04em; }
+#mainTable tr.heading-row{ border-top:2px solid rgba(154,114,20,.35) !important; }
+#mainTable tr.heading-row td:nth-child(3) textarea{ font-weight:600; font-style:italic; color:var(--ink); }
+
+/* ── Preamble / Annex scrollable cells ── */
+#mainTable tr.preamble-row{background:rgba(106,90,173,.04)}
+#mainTable tr.preamble-row:hover{background:rgba(106,90,173,.08)}
+#mainTable tr.annex-row{background:rgba(154,114,20,.03)}
+#mainTable tr.annex-row:hover{background:rgba(154,114,20,.07)}
+.annex-cell{max-height:160px;overflow-y:auto;border:1px solid var(--border-light);border-radius:2px;background:rgba(255,255,255,.65)}
+.preamble-cell{border-color:rgba(106,90,173,.22)!important}
+.annex-pre{font-family:'Libre Baskerville',serif;font-size:.77rem;line-height:1.65;color:var(--ink);white-space:pre-wrap;word-break:break-word;padding:.48rem .7rem;margin:0;outline:none;min-height:55px}
+.annex-pre:focus{background:rgba(154,114,20,.04)}
+.annex-id-input{font-family:'JetBrains Mono',monospace;font-size:.71rem;font-weight:700;color:var(--gold);width:92px;border-bottom:2px solid var(--gold)!important}
+
+/* ── JSON view ── */
+.json-view{background:var(--code-bg);padding:.9rem 1.1rem;font-family:'JetBrains Mono',monospace;font-size:.71rem;line-height:1.7;color:var(--code-text);overflow:auto;flex:1;white-space:pre}
+.json-key{color:#e8c56e}.json-str{color:#a8d5a2}.json-num{color:#f0a070}.json-null{color:#888}
+
+/* ── Status bar ── */
+.status-bar{display:flex;align-items:center;gap:.9rem;padding:.28rem 1.1rem;background:var(--parchment);border-top:1.5px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.59rem;color:var(--muted);flex-shrink:0;flex-wrap:wrap}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);display:inline-block;margin-right:.3rem;vertical-align:middle}
+#lastAction{margin-left:auto}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--gold)}
+
+/* ── Responsive ── */
+@media(max-width:640px){
+  .nav-panel{display:none}
+  .input-panel.open{max-height:540px}
+  .logo-sub{display:none}
+}
+
+/* ── Law file buttons ── */
+.law-files-row{ margin-top:3px; }
+.btn-lawfile{ background:rgba(80,160,100,.07)!important; border-color:rgba(80,160,100,.3)!important; color:#7bcf92!important; }
+.btn-lawfile:hover{ background:rgba(80,160,100,.18)!important; border-color:rgba(80,160,100,.6)!important; }
+.btn-lawfile.active{ background:rgba(80,160,100,.22)!important; border-color:#7bcf92!important; color:#a8e6b8!important; font-weight:600; }
+
+/* ── Law file metadata banner ── */
+.law-file-meta{
+  position:relative;
+  background:rgba(80,160,100,.06);
+  border:1px solid rgba(80,160,100,.22);
+  border-radius:3px;
+  padding:6px 28px 6px 9px;
+  margin-top:4px;
+  font-family:'JetBrains Mono',monospace;
+}
+.lmf-top{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-bottom:2px; }
+.lmf-title{ font-size:.71rem; font-weight:700; color:#a8e6b8; }
+.lmf-short{ font-size:.65rem; color:#7bcf92; }
+.lmf-tag{
+  font-size:.58rem; padding:1px 5px; border-radius:2px;
+  background:rgba(80,160,100,.14); color:#7bcf92; border:1px solid rgba(80,160,100,.2);
+}
+.lmf-upd{ font-size:.58rem; color:var(--muted); }
+.lmf-src{ font-size:.58rem; color:var(--muted); }
+.lmf-desc{
+  font-size:.63rem; color:var(--ink); opacity:.8; line-height:1.45;
+  margin-top:2px; white-space:normal;
+}
+.lmf-close{
+  position:absolute; top:4px; right:5px;
+  background:none; border:none; color:var(--muted); font-size:.65rem;
+  cursor:pointer; padding:0 3px; line-height:1;
+}
+.lmf-close:hover{ color:var(--red); }
+
+
+#idEditWarn.show{opacity:1}
+
+/* ── Law Files button ── */
+.hbtn-lf{
+  color:#7bcf92!important;
+  border-color:rgba(80,160,100,.35)!important;
+  background:rgba(80,160,100,.07)!important;
+  position:relative;
+}
+.hbtn-lf:hover{
+  background:rgba(80,160,100,.18)!important;
+  border-color:rgba(80,160,100,.6)!important;
+  color:#a8e6b8!important;
+}
+.hbtn-lf.active{
+  background:rgba(80,160,100,.22)!important;
+  border-color:#7bcf92!important;
+  color:#a8e6b8!important;
+}
+
+/* ── Law Files panel ── */
+.lf-panel{
+  background:var(--panel);
+  border:1px solid rgba(80,160,100,.28);
+  border-radius:4px;
+  margin-top:5px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:.68rem;
+  overflow:hidden;
+  box-shadow:0 4px 18px rgba(0,0,0,.35);
+}
+.lf-panel-hdr{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:6px 10px 5px;
+  background:rgba(80,160,100,.09);
+  border-bottom:1px solid rgba(80,160,100,.18);
+}
+.lf-panel-title{
+  font-size:.67rem;
+  font-weight:700;
+  color:#7bcf92;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.lf-close{
+  background:none;
+  border:none;
+  color:var(--muted);
+  font-size:.7rem;
+  cursor:pointer;
+  padding:0 2px;
+  line-height:1;
+}
+.lf-close:hover{ color:var(--red); }
+
+/* Found files section */
+.lf-found-empty, .lf-found-list{
+  padding:7px 10px;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.lf-found-empty{
+  color:var(--muted);
+  font-size:.63rem;
+  font-style:italic;
+}
+.lf-found-hd{
+  font-size:.6rem;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-bottom:5px;
+}
+.lf-file-btn{
+  display:flex;
+  align-items:flex-start;
+  gap:7px;
+  width:100%;
+  background:rgba(80,160,100,.06);
+  border:1px solid rgba(80,160,100,.18);
+  border-radius:3px;
+  padding:5px 8px;
+  cursor:pointer;
+  text-align:left;
+  margin-bottom:4px;
+  transition:background .15s;
+}
+.lf-file-btn:hover{
+  background:rgba(80,160,100,.16);
+  border-color:rgba(80,160,100,.4);
+}
+.lf-file-btn.active{
+  background:rgba(80,160,100,.22);
+  border-color:#7bcf92;
+}
+.lf-file-icon{ font-size:.85rem; flex-shrink:0; margin-top:1px; }
+.lf-file-info{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.lf-file-name{ font-size:.7rem; font-weight:700; color:#a8e6b8; }
+.lf-file-short{ font-size:.62rem; color:#7bcf92; }
+.lf-file-tags{ display:flex; flex-wrap:wrap; gap:3px; margin-top:2px; }
+.lf-file-tag{
+  font-size:.55rem;
+  padding:1px 4px;
+  border-radius:2px;
+  background:rgba(80,160,100,.12);
+  color:#7bcf92;
+  border:1px solid rgba(80,160,100,.2);
+}
+.lf-file-desc{ font-size:.61rem; color:var(--ink); opacity:.75; margin-top:2px; }
+
+/* How-to section */
+.lf-howto{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.lf-howto-hd{
+  font-size:.62rem;
+  font-weight:700;
+  color:var(--gold);
+  text-transform:uppercase;
+  letter-spacing:.07em;
+  margin-bottom:6px;
+}
+.lf-howto-body p{
+  margin:4px 0;
+  color:var(--ink);
+  font-size:.63rem;
+  line-height:1.5;
+}
+.lf-howto-body code{
+  background:rgba(255,255,255,.07);
+  border-radius:2px;
+  padding:0 3px;
+  color:#e8d9a0;
+  font-family:'JetBrains Mono',monospace;
+}
+.lf-code{
+  background:rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:3px;
+  padding:6px 8px;
+  font-size:.59rem;
+  color:#c8b97a;
+  overflow-x:auto;
+  white-space:pre;
+  margin:4px 0 6px;
+  font-family:'JetBrains Mono',monospace;
+  line-height:1.55;
+}
+.lf-tip{
+  background:rgba(232,217,160,.06);
+  border:1px solid rgba(232,217,160,.14);
+  border-radius:3px;
+  padding:4px 7px;
+  font-size:.61rem;
+  color:#e8d9a0;
+  margin-top:5px;
+}
+.lf-tip code{
+  background:rgba(255,255,255,.07);
+  border-radius:2px;
+  padding:0 3px;
+  color:#e8d9a0;
+}
+.lf-panel-footer{
+  padding:5px 10px;
+  display:flex;
+  justify-content:flex-end;
+  background:rgba(0,0,0,.12);
+}
+
+/* ── Law file metadata banner ── */
+.law-file-meta{
+  background:rgba(80,160,100,.06);
+  border:1px solid rgba(80,160,100,.2);
+  border-radius:3px;
+  padding:5px 28px 5px 9px;
+  margin-top:4px;
+  font-family:'JetBrains Mono',monospace;
+  position:relative;
+}
+.lmf-top{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-bottom:2px; }
+.lmf-title{ font-size:.7rem; font-weight:700; color:#a8e6b8; }
+.lmf-short{ font-size:.64rem; color:#7bcf92; }
+.lmf-tag{
+  font-size:.57rem;
+  padding:1px 5px;
+  border-radius:2px;
+  background:rgba(80,160,100,.14);
+  color:#7bcf92;
+  border:1px solid rgba(80,160,100,.2);
+}
+.lmf-upd,.lmf-src{ font-size:.57rem; color:var(--muted); }
+.lmf-desc{ font-size:.62rem; color:var(--ink); opacity:.8; line-height:1.45; margin-top:2px; }
+.lmf-close{
+  position:absolute; top:4px; right:5px;
+  background:none; border:none; color:var(--muted);
+  font-size:.65rem; cursor:pointer; padding:0 3px; line-height:1;
+}
+.lmf-close:hover{ color:var(--red); }
+
+/* ── Law file sample buttons (in the found section) ── */
+.btn-lawfile{
+  background:rgba(80,160,100,.07)!important;
+  border-color:rgba(80,160,100,.3)!important;
+  color:#7bcf92!important;
+}
+.btn-lawfile:hover{
+  background:rgba(80,160,100,.18)!important;
+  border-color:rgba(80,160,100,.6)!important;
+}
+.btn-lawfile.active{
+  background:rgba(80,160,100,.22)!important;
+  border-color:#7bcf92!important;
+  color:#a8e6b8!important;
+  font-weight:600;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Lex<span>Parse</span></div>
+  <div class="logo-sub">Legal Text → JSON</div>
+  <div class="header-actions">
+    <button class="hbtn" id="toggleInputBtn" onclick="toggleInputPanel()" title="इनपुट वा पाठ इनपुट गर्नुहोस्">✎ Input</button>
+    <button class="hbtn" onclick="exportCsv()" title="CSV फाइलमा निर्यात गर्नुहोस्">⬇ CSV</button>
+    <button class="hbtn" onclick="copyJson()" title="JSON को क्लिपबोर्डमा कपी गर्नुहोस्">⎘ JSON<span class="copy-ok" id="copyMsg">✓</span></button>
+    <button class="hbtn" onclick="clearAll()" title="सबै डेटा मेटाउनुहोस्">⊘ Clear</button>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- LEFT NAV -->
+  <nav class="nav-panel">
+    <div class="nav-section">Structure</div>
+    <!-- Nav search -->
+    <div class="nav-search-bar" id="navSearchBar">
+      <span class="nav-search-icon">⌕</span>
+      <input type="text" id="navSearchInput" placeholder="Filter outline…" oninput="navSearch()" onkeydown="navSearchKey(event)" autocomplete="off" spellcheck="false"/>
+      <span class="nav-search-count" id="navSearchCount"></span>
+      <button class="nav-snav" id="navPrev" onclick="navSearchNav(-1)" title="अघिल्लो परिणाम">‹</button>
+      <button class="nav-snav" id="navNext" onclick="navSearchNav(1)" title="अगामी परिणाम">›</button>
+      <button class="nav-sclear" id="navClear" onclick="clearNavSearch()" title="खोज मेटाउनुहोस्">✕</button>
+    </div>
+    <!-- Nav options row -->
+    <div class="nav-opts-row" id="navOptsRow">
+      <button class="search-opt-btn" id="navOptBtn" onclick="toggleNavOpts()" title="खोज विकल्प">⋮</button>
+      <button class="search-reset-btn" id="resetNavBtn" onclick="resetSearch2()" title="खोज विकल्प पुनः सेट गर्नुहोस्">Reset</button>
+    </div>
+    <!-- Nav options panel -->
+    <div class="nav-opts-panel" id="navOptsPanel" style="display:none">
+      <label class="search-opt" title="Show only matched outline items">
+        <input type="checkbox" id="navChkFilter" onchange="navSearch()"/>
+        <span>Filter</span>
+      </label>
+      <label class="search-opt" title="Nepali normalizer for outline search">
+        <input type="checkbox" id="navChkNepali" onchange="navSearch()"/>
+        <span>नेपाली</span>
+      </label>
+    </div>
+    <div class="outline-scroll">
+      <div id="outlineContent" class="outline-empty">Parse a document to see sections here.</div>
+    </div>
+  </nav>
+
+  <!-- RIGHT WORK AREA -->
+  <div class="work-area">
+
+    <!-- INPUT PANEL -->
+    <div class="input-panel" id="inputPanel">
+      <div class="input-inner">
+        <div class="schema-box">
+          <div>
+            <strong style="font-family:'JetBrains Mono',monospace;font-size:.59rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold)">ID Schema</strong><br>
+            Nepali: <code>dafa.upadafa.khanda</code> &middot; English: <code>section.subsection.clause</code><br>
+            Sub-sub: <code>5.1.g1</code> &nbsp;&middot;&nbsp; Proviso: <code>4.1.ka.spl</code>
+          </div>
+          <div class="schema-note">▶ Amendment prefix ⊕ or * preserved verbatim</div>
+        </div>
+        <div class="input-topbar">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:.57rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;white-space:nowrap;align-self:center">Samples:</span>
+          <div class="sample-group">
+            <button class="btn-sample" id="sb-en" onclick="loadSample('en')">Interim Govt (EN)</button>
+            <button class="btn-sample np" id="sb-kv" onclick="loadSample('kv')">कानून व्याख्या</button>
+            <button class="btn-sample np" id="sb-pa" onclick="loadSample('pa')">प्रमाण ऐन</button>
+            <button class="btn-sample np" id="sb-sc" onclick="loadSample('sc')">सर्वोच्च अदालत</button>
+          </div>
+          <div class="law-files-group">
+            <span class="law-files-label">External Laws:</span>
+            <select id="lawFileSelect" onchange="handleLawFileSelect()" title="Select an external law file to load">
+              <option value="">— Select Law File —</option>
+            </select>
+          </div>
+        </div>
+        <!-- Law file metadata banner -->
+        <div class="law-file-meta" id="lawFileMeta" style="display:none"></div>
+        <div id="dropZone" class="drop-zone"
+          ondragover="event.preventDefault();this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="handleDrop(event)">
+          ⬇ Drop file here &nbsp;(.txt · .doc · .docx · .rtf · .pdf · .json)&nbsp; or
+          <label for="fileInput" class="file-label">browse</label>
+          <input type="file" id="fileInput" accept=".txt,.doc,.docx,.rtf,.pdf,.json" style="display:none" onchange="handleFile(this.files[0])"/>
+        </div>
+        <textarea id="inputText" placeholder="Paste or drop legal text here (English or Nepali)&#10;&#10;Amendment markers: ⊕ or * prefix"></textarea>
+        <!-- Input mode tabs -->
+        <div class="input-mode-bar">
+          <button class="inp-tab active" id="inpTabText" onclick="switchInpMode('text')">Plain Text / Legal</button>
+          <button class="inp-tab" id="inpTabJson" onclick="switchInpMode('json')">JSON Table</button>
+          <span class="inp-mode-hint" id="inpModeHint">Legal text → parsed automatically</span>
+        </div>
+        <div class="input-actions">
+          <button class="hbtn primary" id="parseBtn" onclick="parseText()">→ Parse to Table</button>
+          <button class="hbtn" onclick="document.getElementById('fileInput').click()" title=".txt, .doc, .docx, .rtf, .pdf, .json फाइल अपलोड गर्नुहोस्">↑ Upload File</button>
+          <button class="hbtn hbtn-lf" id="lawFileBtn" onclick="toggleLawFilePanel()"
+            title="Load external .js law files — click to browse loaded files or learn how to add new ones">⊕ Law Files</button>
+          <div class="status-hint" id="srcLabel">—</div>
+        </div>
+        <!-- ── Law Files panel ── -->
+        <div class="lf-panel" id="lfPanel" style="display:none" role="dialog" aria-label="Law Files panel">
+          <div class="lf-panel-hdr">
+            <span class="lf-panel-title">⊕ External Law Files</span>
+            <button class="lf-close" onclick="toggleLawFilePanel()" title="Close panel">✕</button>
+          </div>
+          <div id="lfFoundWrap"></div>
+          <div class="lf-howto">
+            <div class="lf-howto-hd">How to add a law file</div>
+            <div class="lf-howto-body">
+              <p><strong>1.</strong> Create a <code>.js</code> file in the <strong>same folder</strong> as <code>index.html</code>:</p>
+              <pre class="lf-code">window.lawEvidenceAct2031 = {
+  metadata: {
+    title: "My Act, 2081",  shortTitle: "My Act",
+    year_bs: "२०८१",        year_ad: "2024",
+    language: "Nepali",     version: "1.0",
+    source: "Nepal Law Commission",
+    lastUpdated: "2024-01-01",
+    description: "Brief description."
+  },
+  content: [
+    { "id": "१",   "law": "१. संक्षिप्त नाम…", "remark1": "", "remark2": "" },
+    { "id": "१.१", "law": "(१) …",              "remark1": "", "remark2": "" }
+  ]
+};</pre>
+              <p><strong>2.</strong> Add to <code>index.html</code> before <code>&lt;/body&gt;</code>:</p>
+              <pre class="lf-code">&lt;script src="my_act.js"&gt;&lt;/script&gt;</pre>
+              <p><strong>3.</strong> Reload page → click <strong>⊕ Law Files</strong> → your file appears as a button.</p>
+              <div class="lf-tip">💡 Variable must start with <code>window.law</code> + capital letter, e.g. <code>window.lawMyAct</code>.</div>
+            </div>
+          </div>
+          <div class="lf-panel-footer">
+            <button class="hbtn" style="font-size:.65rem;padding:3px 9px" onclick="rescanLawFiles()" title="नयाँ कानून फाइल पुनः स्क्यान गर्नुहोस्">↺ Rescan</button>
+          </div>
+        </div>
+        <!-- Input history -->
+        <div class="inp-history-bar" id="inpHistoryBar">
+          <span class="inp-history-label">Recent:</span>
+          <div class="inp-history-pills" id="inpHistoryPills"></div>
+          <button class="inp-history-clear" onclick="clearInputHistory()" title="इतिहास मेटाउनुहोस्">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- OUTPUT AREA -->
+    <div class="output-area">
+      <div class="output-bar">
+        <div class="output-tabs">
+          <button class="tab active" id="tab-table" onclick="switchTab('table',this)">Table</button>
+          <button class="tab" id="tab-json" onclick="switchTab('json',this)">JSON</button>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn-icon" title="माथिको पङ्क्तिमा सरिने">↑</button>
+          <button class="btn-icon" title="तलको पङ्क्तिमा सरिने">↓</button>
+          <button class="btn-icon" title="पङ्क्तिको प्रति कपी गर्नुहोस्">⧉</button>
+        </div>
+      </div>
+      <div class="add-row-bar">
+        <input id="newRowId" type="text" placeholder="ID e.g. 2.1.ka"/>
+        <button class="btn-sm" onclick="addRow()">+ Add Row</button>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:.59rem;color:var(--muted);margin-left:auto">
+          <span class="status-dot"></span><span id="rowCount">0 rows</span>
+        </span>
+      </div>
+      <!-- Search bar -->
+      <div class="search-bar" id="searchBar">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="searchInput" placeholder="Search ID, text, remarks…" oninput="liveSearch()" onkeydown="searchKeyNav(event)" autocomplete="off" spellcheck="false"/>
+        <span class="search-count" id="searchCount"></span>
+        <button class="search-nav" id="searchPrev" onclick="searchNav(-1)" title="अघिल्लो परिणाम (Shift+Enter)">‹</button>
+        <button class="search-nav" id="searchNext" onclick="searchNav(1)" title="अगामी परिणाम (Enter)">›</button>
+        <button class="search-clear" id="searchClear" onclick="clearSearch()" title="खोज मेटाउनुहोस् (Esc)">✕</button>
+        <span class="search-divider"></span>
+        <!-- ⋮ options menu toggle -->
+        <button class="search-opt-btn" id="searchOptBtn" onclick="toggleSearchOpts()" title="खोज विकल्प">⋮</button>
+        <button class="search-reset-btn" id="resetSearchBtn" onclick="resetSearch1()" title="खोज विकल्प पुनः सेट गर्नुहोस्">Reset</button>
+      </div>
+      <!-- Search options panel (collapsed by default) -->
+      <div class="search-opts-panel" id="searchOptsPanel" style="display:none">
+        <label class="search-opt" title="Show only matched rows — hide non-matching rows">
+          <input type="checkbox" id="chkFilter" onchange="liveSearch()"/>
+          <span>Filter</span>
+        </label>
+        <label class="search-opt" title="Nepali normalizer — treats श/ष→स, ङ/ण/ञ→न, व→ब, ी→ि, ू→ु as equivalent">
+          <input type="checkbox" id="chkNepali" onchange="liveSearch()"/>
+          <span>नेपाली</span>
+        </label>
+        <label class="search-opt" title="Truncate — show excerpts around match (unchecked = full content)">
+          <input type="checkbox" id="chkTruncate" checked onchange="liveSearch()"/>
+          <span>Truncate</span>
+        </label>
+      </div>
+      <div class="output-view active" id="view-table">
+        <div class="table-wrap">
+          <table id="mainTable">
+            <thead>
+              <tr>
+                <th>#</th><th>ID</th><th>Law / Legal Text</th><th>Remark 1</th><th>Remark 2</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr><td colspan="6" class="table-empty">Select a sample or paste legal text, then click Parse…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="output-view" id="view-json">
+        <div class="json-view" id="jsonOut">// Parse text to see JSON output</div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span><span class="status-dot"></span><span id="statusMsg">Ready</span></span>
+      <span id="lastAction">—</span>
+    </div>
+  </div>
+</div>
+
+<script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+var tableData=[];
+var SAMPLES={"en": {"label": "Interim Government of Nepal Act, 2007 [Nepal_Theinterim.pdf]", "text": "17. Fundamental principles of law:-\n(1) No tax shall be levied or collected except under the authority of law.\n(2) Subject to the laws for the time being in force, all citizens shall have the right.\n(a) To freedom of speech and expression;\n(b) To assemble peaceably and without arms;\n(c) To form associations and unions;\n(d) To move freely throughout the territory of Nepal;\n(e) To reside and settle in any part of Nepal;\n(f) To acquire, hold, and dispose of property;\n(g) To practice any profession or to carry on any occupation, trade, or business.\n18. Rule of law: the Government shall ensure that:-\n(1) No person is convicted of any offence except for violation of law in force at the time of the commission of the act charged as an offence, nor is subjected to a penalty greater than that which might have been inflected under the law in force at the time of the commission of the offence.\n(2) No person is prosecuted and punished for the same offence more than once.\n(3) No person accused of any offence is compelled to be a witness against himself.\n19. Personal liberty: No person shall be deprived of his life or personal liberty except according to procedure established by law or rules made by Government for the public goods, or for the maintenance of public order or the security of the state.\n20. Traffic in human beings, beggary:-\n(1) Traffic in human beings and beggars and other similar forms of forced labour shall be prohibited and any contravention of this provision shall be an offence punishable in accordance with law.\n(2) Nothing in this section shall prevent the Government from imposing compulsory service of public purpose, and in imposing such service the Government shall not make any discrimination on grounds only of religion, race, cast or class or any of them.\n21. Children: No child bellow the age of fourteen years shall be employed to work in any factory or mine or engaged in any other hazardous employment."}, "kv": {"label": "नेपाल कानून व्याख्या सम्बन्धी ऐन, २०१० [कानून_व्याख्या_ऐन_२०१०.docx]", "text": "१. संक्षिप्त नामः यस ऐनलाई \"नेपाल कानून व्याख्या सम्बन्धी ऐन, २०१०\" भनिनेछ ।\n२. परिभाषाः विषय वा प्रसङ्गबाट अर्को अर्थ नलागेमा यस ऐन वा अरु नेपाल ऐनहरुमा,--\n(क) कार्य--फौजदारी या देवानी कसूरको प्रसङ्गमा प्रयोग गरेको \"कार्य\" भन्ने शब्दभित्र कार्यहरुको समूह समेतपर्छ र गरेका कार्यहरुलाई जनाउने शब्दहरुले कानूनले गर्नुपर्ने नगरेको समेत जनाउँछ ।\n(ख) परिच्छेद--यो शब्दले \"परिच्छेद\" भनी जनिएको नेपाल ऐनको कुनै परिच्छेद सम्झनु पर्छ।\n(ग) प्रारम्भ--नेपाल ऐनको प्रसङ्गमा प्रयोग गरिएको \"प्रारम्भ\" भन्ने शब्दले ऐन लागू हुने दिनलाई सम्झनु पर्छ।\n(घ) लिखत--यो शब्दले अक्षर, अंक तथा चिन्हहरुद्वारा कुनै विषयलाई लेखपढ गर्ने कामको निमित्त प्रयोग हुन सक्ने वा प्रयोगमा ल्याउने मनसाय गरिएको उक्त साधनहरुमध्ये एक वा एकभन्दा बढी साधनहरुद्वारा कुनै वस्तुमा लेखिएको, प्रकट गरिएको तथा वर्णन गरिएको विषयलाई लिइनेछ ।\n(ङ) ऐन--यो शब्दले ✲ऐन, ऐन सरहका संहिता, सवाल र तिनमा लेखिएको कुनै कुरालाई समेत जनाउँछ ।\n(च) बाबु--यो शब्दले कानून बमोजिम ✺धर्मपुत्र वा धर्मपुत्री राख्न पाउनेमा सो राख्ने बाबुलाई समेत जनाउँछ ।\n(छ) आर्थिक वर्ष--यो शब्दले श्रावण संक्रान्तिदेखि शुरु हुने साललाई सम्झनु पर्छ।\n(ज) लापरवाहीसाथ गरेको वा नगरेको जे भए तापनि वास्तवमा इमान्दारीसाथ गरिएको कामलाई \"असल नियतले गरेको\" मानिनेछ ।\n▶(झ) \"नेपाल सरकार\" भन्नाले--\n(क) नेपाल अन्तरिम शासन विधान प्रारम्भ भएदेखि २०१६ साल आषाढ १५ गतेसम्म गरिएको कुनै कामका सम्बन्धमा मन्त्रिमण्डल रहेको अवस्थामा नेपाल अन्तरिम शासन विधान बमोजिम मन्त्रीहरुको सल्लाह अनुसार र मन्त्रिमण्डल नरहेको अवस्थामा मन्त्रिपरिषद्का सभासदहरुको सल्लाह अनुसार वा शाही विशेषाधिकार प्रयोगको काम गरिबक्सने श्री ५ महाराजाधिराजलाई, र\n⊗(झ१) \"प्रदेश सरकार\" भन्नाले नेपालको संविधानको धारा १६२ बमोजिम प्रदेशको कार्यकारिणी अधिकार प्रयोग गर्ने प्रदेशको मन्त्रिपरिषद् सम्झनु पर्छ।\n⊗(झ२) \"स्थानीय कार्यपालिका\" भन्नाले नेपालको संविधानको धारा २१४ बमोजिम स्थानीय तहको कार्यकारिणी अधिकार प्रयोग गर्ने गाउँ कार्यपालिका वा नगर कार्यपालिका सम्झनु पर्छ।\n(ट) अचल सम्पत्ति--भन्नाले जग्गा जमीन, त्यसबाट हुने लाभ, जमीनमा जडिएका चीजबस्तु समेत जनाउँछ ।\n(ठ) नेपाल ऐन--यो शब्दले २००७ साल फाल्गुण ७ गते उप्रान्त ▶जारी भएका कुनै ऐन र नेपाल अन्तरिम शासन विधान, २००७ वा नेपाल अधिराज्यको संविधान वा नेपालको संविधान ©वा नेपाल अधिराज्यको संविधान, २०४७ वा प्रतिनिधि सभाको घोषणा, २०६३ वा नेपालको अन्तरिम संविधान, २०६३ ✲वा नेपालको संविधान बमोजिम संघ, प्रदेश वा स्थानीय तहले बनाएको जुनसुकै ऐनलाई सम्झनु पर्छ।\n(ड) नेपाल कानून--यो शब्दले नेपाल ऐन वा नेपालको कुनै भागमा कानून सरह लागू हुने ऐन, सवाल, नियम, ✲आदेश, विनियम वा ऐन अन्तर्गत बनेका निर्देशिका वा कार्यविधि सम्झनु पर्छ।\n(ढ) महिना--यो शब्दले नेपाली पञ्चाङ्ग बमोजिम सङ्क्रान्तिको हिसाब गणना गरिने महिना सम्झनु पर्छ।\n(ण) चल सम्पत्ति--यो शब्दले अचल सम्पत्ति बाहेक अरु हरेक किसिमको सम्पत्तिलाई सम्झनु पर्छ।\n(त) शपथ--यो शब्दले धर्म भाक्नको सट्टा ऐनले प्रतिज्ञा वा घोषणा गर्न पाउने व्यक्तिले गरेको प्रतिज्ञा वा घोषणालाई समेत जनाउँछ ।\n✤(म१) \"पुत्री\" (छोरी)--यो शब्दले ऐनमा धर्मपुत्री राख्न पाउनेले राखेको धर्मपुत्रीलाई समेत जनाउँछ ।\n✲(ल) लिखित--यो शब्दले छापिएको, लिथो गरेको, तस्वीर खिचेको, अक्षर टाइप गरेको वा अन्य कुनै तवरले प्रकट गरिएको लेखलाई सम्झनु पर्छ र सो शब्दले ती सबैको आंशिक वर्णन समेत जनाउँछ ।"}, "pa": {"label": "प्रमाण ऐन, २०३१ [प्रमाण_ऐन_२०३१.docx]", "text": "१. संक्षिप्त नाम, विस्तार र प्रारम्भः (१) यस ऐनको नाम \"प्रमाण ऐन, २०३१\" रहेको छ ।\n(२) यो ऐन अदालत समक्ष हुने मुद्दाको कारबाहीमा लागू हुनेछ ।\n(३) यो ऐन २०३२ साल बैशाख १ गतेदेखि प्रारम्भ हुनेछ ।\n२. परिभाषाः विषय वा प्रसङ्गले अर्को अर्थ नलागेमा यस ऐनमा,--\n☛(क) \"अदालत\" भन्नाले सर्वोच्च अदालत, उच्च अदालत वा जिल्ला अदालत सम्झनु पर्छ र सो शब्दले कानून बमोजिम कुनै खास किसिमका मुद्दाको कारबाही र किनारा गर्न अधिकार प्राप्त अन्य अदालत, न्यायिक निकाय वा अधिकारी समेतलाई जनाउँछ ।\n(ख) \"व्यक्त भएको\" वा \"व्यक्त गरेको\" भन्नाले मौखिक वा लिखित रुपमा वा इशाराद्वारा व्यक्त भएको वा गरेको सम्झनु पर्छ।\n✏(ग) \"सार्वजनिक लिखत\" भन्नाले प्रचलित कानून बमोजिम सार्वजनिक लिखत मानिने लिखत सम्झनु पर्छ र सो शब्दले त्यस्तो लिखतको डिजिटल वा विद्युतीय स्वरुप समेतलाई जनाउँछ।\n३. प्रमाण बुझ्न हुने कुराहरुः अदालतले मुद्दामा ठहर गर्नुपर्ने कुरा र त्यस्तो कुरासँग सम्बद्ध कुराको मात्र प्रमाण बुझ्न हुन्छ ।\nस्पष्टीकरणः \"सम्बद्ध कुरा\" भन्नाले मुद्दामा ठहर गर्नुपर्ने कुरालाई प्रमाणित वा खण्डन गर्न सहायता हुने कुरालाई सम्झनु पर्छ।\n४. प्रमाण बुझ्न नपर्ने कुराहरुः (१) देहायका कुनै कुराका सम्बन्धमा प्रमाण बुझ्न पर्दैनः--\n(क) मुद्दाको कुनै पक्षले व्यक्त गरेको कुनै कुरा अर्को पक्षले लिखित रुपमा स्वीकार गरेमा सो स्वीकार गरेको कुरा,\nतर अदालतले उपयुक्त ठानेमा त्यस्तो कुराका सम्बन्धमा पनि प्रमाण बुझ्न सक्नेछ ।\n(ख) दफा ५ बमोजिम अदालतले स्वयं न्यायिक जानकारी लिने कुरा ।\n(२) दफा ६ वा ७ बमोजिम कुनै कुरा अनुमान गर्न अदालतले कुनै प्रमाण बुझ्न पर्दैन ।\nतर दफा ७ बमोजिम कुनै कुरा अनुमान गर्नुभन्दा अघि अदालतले आवश्यक प्रमाण बुझ्न सक्नेछ ।\n५. अदालतले स्वयं जानकारी लिने कुराहरुः ©(१) अदालतले देहायका कुराहरुको स्वयं न्यायिक जानकारी लिनु पर्छः--\n(क) नेपालको इलाका,\n(ख) नेपालको संविधान र नेपाल कानून,\n(ग) नेपालको राष्ट्रिय झण्डा,\n✒(ग१) नेपालको राष्ट्रिय गान,\n✒(ग२) नेपालको निशान छाप,\n(घ) राष्ट्रपतिको शपथ,\n(ङ) विधेयकको प्रमाणीकरण मिति,\n(च) नेपाल राजपत्रमा प्रकाशित सूचनाहरु ।\n(२) अदालतले विवादको विषय हुन नसक्ने सामान्य ज्ञानका कुराहरुको स्वयं न्यायिक जानकारी लिन हुन्छ ।\n✒(२क) उपदफा (२) को अवस्थामा बाहेक अदालतले न्यायिक जानकारीमा लिने विषयमा पक्षले प्रमाण पुर्‍याउनु पर्ने छैन।\n(३) यस दफा अन्तर्गत न्यायिक जानकारी लिन अदालतले आवश्यक किताब वा लिखतको सहायता लिन सक्नेछ ।\n६. अदालतले अनुमान गर्ने कुराहरुः अन्यथा प्रमाणित नभएसम्म,--\n(क) एकाघरसँगका अंशियारहरुमध्ये जुनसुकै अंशियारका नाममा रहेको सम्पत्ति सगोलको सम्पत्ति हो भनी अदालतले अनुमान गर्नेछ ।\n(ख) दुई वा सोभन्दा बढी व्यक्तिहरुको भोग वा चलनमा रहेको सम्पत्तिमा ती व्यक्तिहरु सबैको बराबर हक छ भनी अदालतले अनुमान गर्नेछ ।\n(ग) कुनै अदालत वा सरकारी कार्यालयमा कानूनले राख्नु पर्ने स्याहा, स्रेस्ता वा कागजपत्रमा उल्लेख गरिएको कुराहरु सही रुपमा उल्लेख गरिएका हुन् भनी अदालतले अनुमान गर्नेछ ।\n☛(घ) अन्यथा प्रमाणित भएकोमा बाहेक देहायको अवस्थामा जन्मिएको शिशु विवाहित पतिबाट जन्मिएको अनुमान गरिनेछः--\n(१) विवाह भएको मितिबाट एक सय असी दिन पछि जन्मिएको,\n(२) पतिको मृत्यु भएको वा वैवाहिक सम्बन्ध अन्त्य भएको मितिबाट दुई सय बहत्तर दिनभित्र जन्मिएको ।\n✒(घ१) पति र पत्नीको मञ्जुरीले कृत्रिम गर्भाधान प्रणालीद्वारा जन्मिएको शिशु विवाहित पतिबाट नै जन्मिएको हो भनी अदालतले अनुमान गर्नेछ ।\n✒(ङ१) डिजिटल वा विद्युतीय कारोबारबाट सम्झौता वा लिखत भएकोमा रितपूर्वक नै सम्झौता वा लिखत भएको हो भनी अदालतले अनुमान गर्नेछ।\n✒(ङ२) डिजिटल वा विद्युतीय हस्ताक्षरबाट कारोबार भएकोमा रितपूर्वक नै हस्ताक्षर भएको हो भनी अदालतले अनुमान गर्नेछ।"}, "sc": {"label": "सर्वोच्च अदालत नियमावली, २०७४ [सर्वोच्च_अदालत_नियमावली_२०७४.doc]", "text": "१. संक्षिप्त नाम र प्रारम्भः (१) यस नियमावलीको नाम \"सर्वोच्च अदालत नियमावली, २०७४\" रहेको छ ।\n(२) यो नियमावली तुरुन्त प्रारम्भ हुनेछ ।\n२. परिभाषाः विषय वा प्रसङ्गले अर्को अर्थ नलागेमा यस नियमावलीमा,--\n(क) \"अदालत\" भन्नाले सर्वोच्च अदालत सम्झनु पर्छ ।\n(ख) \"न्यायाधीश\" भन्नाले सर्वोच्च अदालतका न्यायाधीश सम्झनु पर्छ र सो शब्दले प्रधान न्यायाधीशलाई समेत जनाउँछ ।\n(ग) \"इजलास\" भन्नाले अदालतको न्यायाधीशले मुद्दाको कारबाही र किनारा गर्न बस्ने इजलास सम्झनु पर्छ ।\n(घ) \"रजिस्ट्रार\" भन्नाले सर्वोच्च अदालतको रजिस्ट्रार सम्झनु पर्छ र सो शब्दले सहायक रजिस्ट्रारलाई समेत जनाउँछ ।\n(ङ) \"मुद्दा\" भन्नाले अदालतमा दायर भएको वा दर्ता भएको मुद्दा, उजुरी, निवेदन वा दरखास्त सम्झनु पर्छ ।\n(च) \"पक्ष\" भन्नाले मुद्दाको वादी वा प्रतिवादी सम्झनु पर्छ र सो शब्दले निवेदक वा विपक्षीलाई समेत जनाउँछ ।\n(छ) \"कारबाही\" भन्नाले मुद्दासम्बन्धी कुनै पनि कानूनी कारवाही सम्झनु पर्छ ।\n३. मुद्दा दर्ताः (१) यस नियमावली बमोजिम अदालतमा दायर हुने मुद्दा रजिस्ट्रार कार्यालयमा दर्ता हुनेछ ।\n(२) मुद्दा दर्ता गर्दा देहायका कुराहरु खुलाउनु पर्नेछः--\n(क) मुद्दाको संक्षिप्त विषयवस्तु,\n(ख) वादी र प्रतिवादीको नाम, थर, वतन,\n(ग) मुद्दाको प्रकृति,\n(घ) माग गरिएको दावी वा राहत ।\n(३) दर्ता भएको मुद्दालाई अनुक्रमांक दिइनेछ ।\n४. निवेदन दर्ताः (१) संविधान वा प्रचलित कानून बमोजिम सर्वोच्च अदालतमा निवेदन दिन पाइने व्यक्तिले यस नियमावली बमोजिम निवेदन दर्ता गराउन सक्नेछ ।\n(२) निवेदनमा देहायका कुराहरु उल्लेख गर्नु पर्नेछः--\n(क) निवेदकको नाम, थर, वतन,\n(ख) निवेदनको विषयवस्तु,\n(ग) निवेदनको आधार र माग ।\n५. तारेखः (१) मुद्दाको सुनुवाई वा कारबाहीको लागि तारेख तोक्ने अधिकार इजलासमा रहनेछ ।\n(२) तारेख तोक्दा देहायका कुराहरु विचार गरिनेछः--\n(क) मुद्दाको जटिलता,\n(ख) पक्षहरुको सुविधा,\n(ग) अदालतको कार्यभार ।\n(३) मुकरर तारेखमा पक्ष वा निजका कानून व्यवसायी उपस्थित नभएमा एकतर्फी कारबाही गर्न सकिनेछ ।\n६. पुनरावेदनः (१) प्रचलित कानून बमोजिम सर्वोच्च अदालतमा पुनरावेदन गर्न पाइने फैसला वा आदेश उपर पुनरावेदन गर्न सकिनेछ ।\n(२) पुनरावेदन दर्ता गर्दा देहायका कागजातहरु पेश गर्नु पर्नेछः--\n(क) पुनरावेदनपत्र,\n(ख) फैसला वा आदेशको प्रतिलिपि,\n(ग) तारेख भर्ना गरेको रसिद ।"}};
+var FOOTNOTES={"kv": {"⊙": "⊙ यो ऐन संवत् २०६५ साल जेठ १५ गते देखि लागू भएको।", "②": "② गणतन्त्र सुदृढीकरण तथा केही नेपाल कानून संशोधन गर्ने ऐन, २०६६ द्वारा झिकिएको।", "✲": "✲ केही नेपाल ऐनलाई संशोधन गर्ने ऐन, २०७५ द्बारा संशोधित ।\n✲ केही नेपाल ऐन संशोधन गर्ने ऐन, २०५३ द्बारा संशोधित ।", "✺": "✺ लैङ्गिक समानता कायम गर्न तथा लैङ्गिक हिंसा अन्त्य गर्न केही नेपाल ऐनलाई संशोधन गर्ने ऐन, २०७२ द्वारा संशोधित।", "▶": "▶ केही नेपाल कानून (संशोधन र पुनः व्यवस्थापन) ऐन, २०२० द्बारा संशोधित ।", "⊳": "⊳ केही नेपाल कानून संशोधन गर्ने ऐन, २०६३ द्बारा झिकिएको ।", "©": "© केही नेपाल कानून संशोधन गर्ने ऐन, २०६३ द्बारा संशोधित ।", "✿": "✿ गणतन्त्र सुदृढीकरण तथा केही नेपाल कानून संशोधन गर्ने ऐन, २०६६ द्बारा संशोधित ।", "⊞": "⊞ केही नेपाल ऐन संशोधन गर्ने ऐन, २०७२ द्वारा झिकिएको।", "❖": "❖ केही नेपाल ऐन संशोधन गर्ने ऐन, २०७२ द्वारा संशोधित।", "★": "★ केही नेपाल ऐन संशोधन गर्ने ऐन, २०७२ द्वारा थप।", "⊗": "⊗ केही नेपाल ऐनलाई संशोधन गर्ने ऐन, २०७५ द्बारा थप ।", "¦": "¦ केही नेपाल ऐन संशोधन गर्ने ऐन, २०५३ द्बारा संशोधित ।", "✰": "✰ गणतन्त्र सुदृढीकरण तथा केही नेपाल कानून संशोधन गर्ने ऐन, २०६६ द्बारा थप ।", "✤": "✤ लैङ्गिक समानता कायम गर्न तथा लैङ्गिक हिंसा अन्त्य गर्न केही नेपाल ऐन लाई संशोधन गर्ने ऐन, २०७२ द्वारा थप।", "⟹": "⟹ केही नेपाल कानून संशोधन गर्ने ऐन, २०६३ द्बारा थप ।", "▻": "▻ केही नेपाल कानून संशोधन गर्ने ऐन, २०६३ द्वारा प्रतिबन्धात्मक वाक्याँश झिकिएको।", "⊕": "⊕ खारेजी र संशोधन ऐन, २०२२ द्बारा संशोधित ।"}, "pa": {"⊙": "⊙ यो ऐन संवत् २०६५साल जेठ१५ गतेदेखि लागू भएको।", "⊿": "⊿ यो ऐन संवत् २०७५साल भाद्र १ गतेदेखि लागू भएको।", "②": "② गणतन्त्र सुदृढीकरण तथा केही नेपाल कानून संशोधन गर्ने ऐन, २०६६द्वारा झिकिएको।\n② गणतन्त्र सुदृढीकरण तथा केही नेपाल कानून संशोधन गर्ने ऐन, २०६६ द्वारा झिकिएको।", "☛": "☛ केही नेपाल कानूनलाई संशोधन, एकीकरण, समायोजन र खारेज गर्ने ऐन, २०७४ द्वारा संशोधित।", "✏": "✏ दोस्रो संशोधनद्वारा संशोधित ।", "©": "© गणतन्त्र सुदृढीकरण तथा केही नेपाल कानून संशोधन गर्ने ऐन, २०६६ द्बारा संशोधित ।", "✒": "✒ दोस्रो संशोधनद्वारा थप ।", "❇": "❇ फौजदारी कसूर तथा फौजदारी कार्यविधि सम्बन्धी केही ऐन संशोधन गर्ने ऐन, २०७९ द्वारा थप।", "✂": "✂ पहिलो संशोधनद्वारा झिकिएको ।", "⬟": "⬟ पहिलो संशोधनद्वारा संशोधित ।", "✆": "✆ पहिलो संशोधनद्वारा थप ।"}};
+var currentSampleKey="";
+var INPUT_MODE="text"; // "text" | "json"
+var INPUT_HISTORY=[]; // [{label,text,mode,ts}] max 3
+
+function loadSample(k){
+  currentSampleKey=k;
+  var s=SAMPLES[k];
+  document.getElementById('inputText').value=s.text;
+  document.getElementById('srcLabel').textContent=s.label;
+  document.querySelectorAll('.btn-sample').forEach(function(b){b.classList.remove('active');});
+  var btn=document.getElementById('sb-'+k);
+  if(btn)btn.classList.add('active');
+  parseText();
+}
+
+function parseText(){
+  var raw=document.getElementById('inputText').value.trim();
+  if(!raw)return;
+  // Detect JSON mode (either mode tab selected or raw text looks like JSON array)
+  if(INPUT_MODE==='json' || (raw.charAt(0)==='[' && raw.indexOf('"id"')>0)){
+    loadJsonTable(raw);
+    return;
+  }
+  var lines=raw.split('\n').map(function(l){return l.trim();}).filter(function(l){return l;});
+  var rows=[];
+  var fnMap={};
+  if(FOOTNOTES[currentSampleKey]) fnMap=FOOTNOTES[currentSampleKey];
+  var symKeys=Object.keys(fnMap).sort(function(a,b){return b.length-a.length;});
+  function getFN(line){
+    var found=[],notes=[];
+    symKeys.forEach(function(sym){
+      if(line.indexOf(sym)>=0&&found.indexOf(sym)<0){found.push(sym);notes.push(fnMap[sym]);}
+    });
+    return notes.join('\n');
+  }
+
+  // ── Pass 1: split out annex blocks ──
+  var reAnnex=/^(अनुसूची|अनुसूचि|Annex|Schedule)([–\-–—\s]*([\d०-९]+|[।\.]|$))?/i;
+  var annexStarted=false,annexBlocks=[],normalLines=[];
+  for(var ai=0;ai<lines.length;ai++){
+    var al=lines[ai];
+    if(al==='\x00PAGE_BREAK\x00') continue;
+    if(reAnnex.test(al)){annexStarted=true;annexBlocks.push({heading:al,lines:[]});}
+    else if(annexStarted){annexBlocks[annexBlocks.length-1].lines.push(al);}
+    else normalLines.push(al);
+  }
+
+  // ── Regex patterns ──
+  // Section:  १.text  OR  9.text  (up to 3 digits + optional Nepali suffix letter)
+  var reArt=/^([^\u0900-\u097F\d(（\[]*?)([\d०-९]{1,3}[क-ह]?)[.।]\s*(.+)/;
+  // Subsection: (१) or (1)
+  var reSub=/^([^\u0900-\u097F\d(（\[]*?)[(（\[]([\d०-९]+)[)）\]]\s*(.+)/;
+  // Sub-subsection / sub-clause: (ग१) (ग२) (2a) etc  — letter+digit combo
+  var reSubSub=/^([^\u0900-\u097F\d(（\[]*?)[(（\[]([कखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह][१२३४५६७८९०\d]+|[\d०-९]+[a-z])[)）\]]\s*(.+)/;
+  // Clause: (क)…(ह) or (a)…(z) or roman (i)(ii)(iii) — single letter/roman only
+  var reCl=/^([^\u0900-\u097F\d(（\[]*?)[(（\[]([कखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह]|[a-z](?!\d)|[ivxlcdmIVXLCDM]{1,6})[)）\]]\s*(.+)/;
+  // Proviso
+  var reProv=/^(तर[,।\s]|Provided\s+that[\s,]|परन्तु[\s,])/i;
+  // Explanation
+  var reExp=/^(स्पष्टीकरण[ःः\s\u0903]|Explanation[\s:])/i;
+  // Chapter
+  var reChapter=/^([^(（(]*?)(परिच्छेद|Chapter)([–\-–—\s]*[\d०-९]*[क-ह]?[.]?)\s*$/;
+  // Strict section (has heading colon) for preamble scan
+  var reArtStrict=/^([^\u0900-\u097F\d(（]*?)([\d०-९]{1,3}[क-ह]?)[.।]\s*([\u0900-\u097F][^\n]*[\u0903:ः]|[A-Z][a-z].{2,}[-:])/;
+
+  // ── Preamble: everything before first real section heading or chapter ──
+  var firstArtIdx=normalLines.length;
+  for(var pi=0;pi<normalLines.length;pi++){
+    if(reArtStrict.test(normalLines[pi])||reChapter.test(normalLines[pi])){firstArtIdx=pi;break;}
+  }
+  if(firstArtIdx>0){
+    var pc=normalLines.slice(0,firstArtIdx).join('\n');
+    rows.push({id:'preamble',law:pc,remark1:getFN(pc),remark2:'',amend:'',isPreamble:true});
+    normalLines=normalLines.slice(firstArtIdx);
+  }
+
+  // ── Context stack: tracks the current numbering at each depth ──
+  // Hierarchy: Section → (Subsection) → (Clause) → (Sub-under-clause)
+  // artNum  = current section number  e.g. "९", "10"
+  // subNum  = current subsection      e.g. "२", "1"  (null if section has direct clauses)
+  // clNum   = current clause          e.g. "क", "a"  (null if no clause yet)
+  // subClNum= subsection under clause e.g. "१" when inside clause (६.घ.१)
+  var artNum=null, subNum=null, clNum=null, subClNum=null;
+  var artHasSubsections=false; // whether current section uses numbered subsections
+
+  // Build the current deepest context id
+  function ctxId(){
+    if(!artNum) return '0';
+    var id=artNum;
+    if(subNum)  id+='.'+subNum;
+    if(clNum)   id+='.'+clNum;
+    if(subClNum) id+='.'+subClNum;
+    return id;
+  }
+  // Count rows whose id starts with given prefix (for deduplicating Prov/Exp)
+  function countId(id){
+    return rows.filter(function(r){return r.id===id||r.id.indexOf(id+'.')===0;}).length;
+  }
+  function makeProvExp(suffix){
+    var base=ctxId();
+    var candidate=base+'.'+suffix;
+    var n=rows.filter(function(r){return r.id===candidate||r.id.indexOf(candidate)===0;}).length;
+    return n===0?candidate:base+'.'+suffix+n;
+  }
+
+  // ── Main parse loop ──
+  for(var i=0;i<normalLines.length;i++){
+    var line=normalLines[i];
+    var fn=getFN(line);
+    var ak=''; // amendment marker
+
+    // ── Proviso (तर / Provided that) ──
+    if(reProv.test(line)){
+      rows.push({id:makeProvExp('Prov'),law:line,remark1:fn,remark2:'',amend:''});
+      continue;
+    }
+    // ── Explanation (स्पष्टीकरण / Explanation) ──
+    if(reExp.test(line)){
+      rows.push({id:makeProvExp('Exp'),law:line,remark1:fn,remark2:'',amend:''});
+      continue;
+    }
+    // ── Chapter heading ──
+    if(reChapter.test(line)){
+      var chNum=line.trim(), chName='';
+      if(i+1<normalLines.length&&!reArt.test(normalLines[i+1])&&!reChapter.test(normalLines[i+1])){
+        i++; chName=normalLines[i].trim();
+      }
+      var chIdx=rows.filter(function(r){return r.isChapter;}).length+1;
+      rows.push({id:'ch.'+chIdx,law:chNum+(chName?' '+chName:''),remark1:'',remark2:'',amend:'',isChapter:true,chNum:chNum,chName:chName});
+      continue;
+    }
+
+    // Strip leading amendment/symbol prefix for matching (but keep original line for law)
+    var stripped=line.replace(/^[^\u0900-\u097F\d(（\[a-zA-Z]+/,'');
+
+    var mA=stripped.match(reArt)||line.match(reArt);
+    var mSS=stripped.match(reSubSub)||line.match(reSubSub);
+    var mS=stripped.match(reSub)||line.match(reSub);
+    var mC=stripped.match(reCl)||line.match(reCl);
+
+    // Prefer more specific matches: SubSub > Sub > Cl (order matters)
+    if(mA){
+      // ── New section ── split heading from inline content ──
+      artNum=mA[2]; subNum=null; clNum=null; subClNum=null;
+      ak=(mA[1]||'').trim();
+
+      // Split the section line into: heading (up to first ः/:) + content (after colon)
+      // Skip colons that are inside parentheses e.g. "(डाइङ्ग डिक्लेरेशन)"
+      var afterNum=line.slice(mA.index!==undefined?mA.index:0);
+      // Find position after "N. " prefix
+      // numEnd = position in `line` where group(3) starts (= total length - group3 length)
+      // This gives us the offset right before the heading+content text
+      var numEnd=line.length-mA[3].length;
+      var afterDot=line.slice(numEnd);
+      var depth2=0, colonPos=-1;
+      for(var ci=0;ci<afterDot.length;ci++){
+        var ch=afterDot[ci];
+        if(ch==='('||ch==='\uff08') depth2++;
+        else if(ch===')'||ch==='\uff09') depth2--;
+        else if((ch==='\u0903'||ch===':'||ch==='\uff1a')&&depth2===0){colonPos=ci;break;}
+      }
+
+      if(colonPos<0){
+        // No colon found — whole line is heading, no separate content
+        artHasSubsections=false;
+        rows.push({id:artNum,law:line,remark1:fn,remark2:'',amend:ak});
+      } else {
+        // Row 1: heading only (up to and including the colon)
+        var headingText=line.slice(0,numEnd+colonPos+1).trim();
+        rows.push({id:artNum,law:headingText,remark1:'',remark2:'',amend:ak,isSectionHeading:true});
+
+        // Row 2: content after colon
+        var contentText=afterDot.slice(colonPos+1).replace(/^[-–—\s]+/,'').trim();
+        if(contentText){
+          // Does content start with a subsection number (१)/(1)?
+          var rSubInline=/^[(（\[]([\d०-९]+)[)）\]]/;
+          var mInline=contentText.match(rSubInline);
+          if(mInline){
+            // Content starts with "(N) ..." → this is the first inline subsection
+            subNum=mInline[1]; clNum=null; subClNum=null;
+            artHasSubsections=true;
+            rows.push({id:artNum+'.'+subNum,law:contentText,remark1:fn,remark2:'',amend:''});
+          } else {
+            // Plain content, no sub number → id = artNum.0
+            artHasSubsections=false;
+            rows.push({id:artNum+'.0',law:contentText,remark1:fn,remark2:'',amend:''});
+          }
+        } else {
+          artHasSubsections=false;
+        }
+      }
+
+    } else if(mSS&&artNum){
+      // ── Sub-subclause: (ग१) (घ२) (2a) ──
+      // These belong under the current clause context (clNum)
+      // e.g. ६.घ → ६.घ१  (sub-subclause replaces clNum, resets subClNum)
+      var ssval=mSS[2];
+      ak=(mSS[1]||'').trim();
+      if(clNum&&subNum){
+        // under subsection+clause: e.g. ५.१.ग → ५.१.ग१
+        clNum=ssval; subClNum=null;
+        rows.push({id:artNum+'.'+subNum+'.'+clNum,law:line,remark1:fn,remark2:'',amend:ak});
+      } else if(subNum){
+        // under subsection: (२क) style
+        subNum=ssval; clNum=null; subClNum=null;
+        rows.push({id:artNum+'.'+subNum,law:line,remark1:fn,remark2:'',amend:ak});
+      } else if(clNum){
+        // under clause (no subsection): ६.घ → ६.घ১ 
+        clNum=ssval; subClNum=null;
+        rows.push({id:artNum+'.'+clNum,law:line,remark1:fn,remark2:'',amend:ak});
+      } else {
+        // sub directly under section
+        clNum=ssval; subClNum=null;
+        rows.push({id:artNum+'.'+clNum,law:line,remark1:fn,remark2:'',amend:ak});
+      }
+
+    } else if(mS&&artNum){
+      // ── Digit in parentheses: could be subsection OR sub-under-clause ──
+      // KEY RULE (sequential continuity): digit N can be sub-under-clause only if:
+      //   N == 1 (starting a fresh sequence under this clause)
+      //   OR the immediately preceding number (N-1) already exists at that sub-level
+      // Otherwise it must be a new subsection at the section level.
+      var sval=mS[2];
+      ak=(mS[1]||'').trim();
+
+      // Helper: Devanagari/ASCII digit string → integer
+      function digitToInt(s){
+        var map={'०':0,'१':1,'२':2,'३':3,'४':4,'५':5,'६':6,'७':7,'८':8,'९':9};
+        var n=0; for(var ci=0;ci<s.length;ci++) n=n*10+(map[s[ci]]!==undefined?map[s[ci]]:parseInt(s[ci])||0);
+        return n;
+      }
+      // Integer → Devanagari digit string (1→'१')
+      function intToNep(n){
+        var nep='०१२३४५६७८९'; var r=''; var s=String(n);
+        for(var ci=0;ci<s.length;ci++) r+=nep[parseInt(s[ci])]; return r;
+      }
+      // Check if digit N can continue a sub-under-clause sequence at given prefix
+      function canExtendSub(N,prefix){
+        var n=digitToInt(N);
+        if(n===1) return true; // always valid to start
+        var prev=n-1;
+        var prevNep=intToNep(prev), prevAsc=String(prev);
+        return rows.some(function(r){return r.id===prefix+'.'+prevNep||r.id===prefix+'.'+prevAsc;});
+      }
+
+      if(clNum&&subNum){
+        var prefix=artNum+'.'+subNum+'.'+clNum;
+        if(canExtendSub(sval,prefix)){
+          // Valid continuation of sub-under-clause sequence e.g. ९.२.क.२
+          subClNum=sval;
+          rows.push({id:prefix+'.'+subClNum,law:line,remark1:fn,remark2:'',amend:ak});
+        } else {
+          // Sequential gap → must be a new subsection, not sub-under-clause
+          subNum=sval; clNum=null; subClNum=null; artHasSubsections=true;
+          rows.push({id:artNum+'.'+subNum,law:line,remark1:fn,remark2:'',amend:ak});
+        }
+      } else if(clNum&&!subNum&&!artHasSubsections){
+        var prefix2=artNum+'.'+clNum;
+        if(canExtendSub(sval,prefix2)){
+          // Sub under direct clause (section has no numbered subsections)
+          subClNum=sval;
+          rows.push({id:prefix2+'.'+subClNum,law:line,remark1:fn,remark2:'',amend:ak});
+        } else {
+          // Sequential gap → treat as new subsection
+          subNum=sval; clNum=null; subClNum=null; artHasSubsections=true;
+          rows.push({id:artNum+'.'+subNum,law:line,remark1:fn,remark2:'',amend:ak});
+        }
+      } else {
+        // No clause context, or artHasSubsections → always a new subsection
+        subNum=sval; clNum=null; subClNum=null; artHasSubsections=true;
+        rows.push({id:artNum+'.'+subNum,law:line,remark1:fn,remark2:'',amend:ak});
+      }
+
+    } else if(mC&&artNum){
+      // ── Clause: (क) (a) (i) ──
+      clNum=mC[2]; subClNum=null;
+      ak=(mC[1]||'').trim();
+      var cid=subNum?artNum+'.'+subNum+'.'+clNum:artNum+'.'+clNum;
+      rows.push({id:cid,law:line,remark1:fn,remark2:'',amend:ak});
+
+    } else if(rows.length>0){
+      // ── Unmatched line ──
+      var prev=rows[rows.length-1];
+      var prevEnds=/[।\.;,–\-]$/.test(prev.law.trim());
+      var looksStructured=/^[⊕*✂✆✏✒✦✰✵❇●❖✤★✿✲▶☛✺⬟▻⟹⊳⊕⊿⊙②¦©⊗⊞]/.test(line);
+      var prevIsSpecial=prev.isChapter||prev.isPreamble||prev.isAnnex;
+      if(!prevEnds&&!looksStructured&&!prevIsSpecial){
+        // Continuation of previous line
+        prev.law=(prev.law+' '+line).trim();
+        if(fn) prev.remark1=prev.remark1?(prev.remark1+'\n'+fn):fn;
+      } else {
+        // Unrecognized structure → blank ID, user fills in
+        rows.push({id:'',law:line,remark1:fn,remark2:'',amend:''});
+      }
+    } else {
+      rows.push({id:'',law:line,remark1:fn,remark2:'',amend:''});
+    }
+  }
+
+  // ── Annex rows ──
+  annexBlocks.forEach(function(blk,ai){
+    var content=[blk.heading].concat(blk.lines).join('\n');
+    rows.push({id:'annex.'+(ai+1),law:content,remark1:getFN(content),remark2:'',amend:'',isAnnex:true});
+  });
+
+  tableData=rows;
+  renderTable(); renderJson();
+  setStatus('Parsed '+rows.length+' rows ('+(annexBlocks.length||0)+' annex)');
+  saveToHistory(raw, 'text');
+  toggleInputPanel(true);
+}
+
+var selectedRow=-1;
+function renderTable(){
+  var tbody=document.getElementById('tableBody');
+  if(!tableData.length){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);font-style:italic;padding:2.2rem;font-family:\'JetBrains Mono\',monospace;font-size:.7rem;">No data</td></tr>';
+    upCounts(0);return;
+  }
+  tbody.innerHTML=tableData.map(function(row,i){
+    var nr=Math.max(1,Math.ceil(row.law.length/46));
+    var classes=[];
+    if(row.amend) classes.push('has-amend');
+    if(row.isSectionHeading) classes.push('heading-row');
+    if(i===selectedRow) classes.push('selected-row');
+    var rc=classes.length?' class="'+classes.join(' ')+'"':'';
+    if(row.isChapter){
+      return '<tr data-i="'+i+'" onclick="selectRow('+i+')" class="chapter-row">'+
+        '<td colspan="6"><div class="chapter-band">'+
+          '<span class="chapter-num">'+esc(row.chNum)+'</span>'+
+          (row.chName?'<span class="chapter-name">'+esc(row.chName)+'</span>':'')+
+          '<button class="del-row" style="margin-left:auto" onclick="event.stopPropagation();delRow('+i+')">\u2715</button>'+
+        '</div></td>'+
+      '</tr>';
+    }
+    if(row.isPreamble){
+      return '<tr'+rc+' data-i="'+i+'" onclick="selectRow('+i+')" class="preamble-row">'+
+        '<td><span class="row-num">'+(i+1)+'</span></td>'+
+        '<td><input value="'+esc(row.id)+'" onchange="upd('+i+',\'id\',this.value)" onclick="event.stopPropagation()" class="annex-id-input"/></td>'+
+        '<td colspan="3"><div class="annex-cell preamble-cell"><pre class="annex-pre" contenteditable="true" spellcheck="false" onblur="upd('+i+',\'law\',this.innerText)" onclick="event.stopPropagation()">'+esc(row.law)+'</pre></div></td>'+
+        '<td><button class="del-row" onclick="event.stopPropagation();delRow('+i+')">\u2715</button></td>'+
+      '</tr>';
+    }
+    if(row.isAnnex){
+      // Annex row: scrollable pre-formatted cell spanning law column
+      return '<tr'+rc+' data-i="'+i+'" onclick="selectRow('+i+')" class="annex-row'+(rc?' '+classes.join(' '):'')+'" data-i="'+i+'">'+
+        '<td><span class="row-num">'+(i+1)+'</span></td>'+
+        '<td><input value="'+esc(row.id)+'" onchange="upd('+i+',\'id\',this.value)" onclick="event.stopPropagation()" class="annex-id-input"/></td>'+
+        '<td colspan="3"><div class="annex-cell"><pre class="annex-pre" contenteditable="true" spellcheck="false" onblur="upd('+i+',\'law\',this.innerText)" onclick="event.stopPropagation()">'+esc(row.law)+'</pre></div></td>'+
+        '<td><button class="del-row" onclick="event.stopPropagation();delRow('+i+')">\u2715</button></td>'+
+      '</tr>';
+    }
+    return '<tr'+rc+' data-i="'+i+'" onclick="selectRow('+i+')">'+
+      '<td><span class="row-num">'+(i+1)+'</span></td>'+
+      '<td><input value="'+esc(row.id)+'" onchange="upd('+i+',\'id\',this.value)" onclick="event.stopPropagation()" onfocus="warnIdEdit(this)" style="font-family:\'JetBrains Mono\',monospace;font-size:.74rem;font-weight:500;color:'+(row.id?'var(--gold)':'var(--red)')+';width:92px;" title="'+(row.id?row.id:'(blank — enter ID)')+'"/></td>'+
+      '<td><textarea rows="'+nr+'" onchange="upd('+i+',\'law\',this.value)" oninput="ar(this)" onclick="event.stopPropagation()">'+esc(row.law)+'</textarea></td>'+
+      '<td><textarea rows="'+Math.max(1,(row.remark1||'').split(String.fromCharCode(10)).length)+'" style="font-family:\'JetBrains Mono\',monospace;font-size:.67rem;color:var(--muted);resize:none;" onchange="upd('+i+',\'remark1\',this.value)" oninput="ar(this)" onclick="event.stopPropagation()">'+esc(row.remark1||'')+'</textarea></td>'+
+      '<td><input value="'+esc(row.remark2)+'" placeholder="\u2014" onchange="upd('+i+',\'remark2\',this.value)" onclick="event.stopPropagation()"/></td>'+
+      '<td><button class="del-row" onclick="event.stopPropagation();delRow('+i+')">\u2715</button></td>'+
+    '</tr>';
+  }).join('');
+  upCounts(tableData.length);
+
+  // Rebuild outline
+  var oel=document.getElementById('outlineContent');
+  if(oel){oel.innerHTML='';oel.className='outline-empty';oel.textContent='—';}
+  buildOutline();
+}
+function selectRow(i){
+  selectedRow=(selectedRow===i)?-1:i;
+  document.querySelectorAll('#tableBody tr').forEach(function(tr,idx){
+    tr.classList.toggle('selected-row',idx===selectedRow);
+  });
+}
+// filterTable removed — search handles filtering
+function moveRow(dir){
+  if(selectedRow<0) return;
+  var ni=selectedRow+dir;
+  if(ni<0||ni>=tableData.length) return;
+  var tmp=tableData[selectedRow]; tableData[selectedRow]=tableData[ni]; tableData[ni]=tmp;
+  selectedRow=ni; renderTable(); renderJson();
+}
+function duplicateRow(){
+  if(selectedRow<0) return;
+  var copy=Object.assign({},tableData[selectedRow]);
+  copy.id=copy.id+'_copy';
+  tableData.splice(selectedRow+1,0,copy);
+  selectedRow=selectedRow+1; renderTable(); renderJson();
+}
+function exportCsv(){
+  if(!tableData.length) return;
+  var hdr=['id','law','remark1','remark2'];
+  var rows=[hdr.join(',')].concat(tableData.map(function(r){
+    return hdr.map(function(k){return '"'+(r[k]||'').replace(/"/g,'\"')+'"';}).join(',');
+  }));
+  var blob=new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='lexparse_export.csv'; a.click();
+}
+
+function ar(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function upd(i,f,v){tableData[i][f]=v;renderJson();}
+function delRow(i){tableData.splice(i,1);renderTable();renderJson();setStatus('Row deleted',tableData.length+' rows');}
+// ── File Upload Handling ──
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag-over');
+  var file=e.dataTransfer.files[0];
+  if(file) handleFile(file);
+}
+function handleFile(file){
+  if(!file) return;
+  var name=file.name.toLowerCase();
+  setStatus('Reading '+file.name+'…','loading');
+  var sl=document.getElementById('srcLabel');if(sl)sl.textContent=file.name;
+  currentSampleKey='';
+  if(name.endsWith('.json')){
+    var r=new FileReader();
+    r.onload=function(e){
+      document.getElementById('inputText').value=e.target.result;
+      switchInpMode('json');
+      loadJsonTable(e.target.result);
+    };
+    r.readAsText(file,'UTF-8');
+  } else if(name.endsWith('.txt')||name.endsWith('.rtf')){
+    var r=new FileReader();
+    r.onload=function(e){
+      var txt=e.target.result;
+      // RTF: strip control words
+      if(name.endsWith('.rtf')) txt=stripRtf(txt);
+      document.getElementById('inputText').value=txt;
+      parseText();
+    };
+    r.readAsText(file,'UTF-8');
+  } else if(name.endsWith('.docx')){
+    readDocx(file);
+  } else if(name.endsWith('.pdf')){
+    readPdf(file);
+  } else {
+    setStatus('Unsupported file type','error');
+  }
+}
+function stripRtf(rtf){
+  // Remove RTF control sequences, keep plain text
+  return rtf
+    .replace(/\\[a-z]+[-]?\d* ?/g,' ')
+    .replace(/[{}\\]/g,' ')
+    .replace(/[ \t]+/g,' ')
+    .replace(/\r\n|\r|\n/g,'\n')
+    .split('\n').map(function(l){return l.trim();}).filter(Boolean).join('\n');
+}
+function readDocx(file){
+  var r=new FileReader();
+  r.onload=function(e){ loadJSZip(e.target.result); };
+  r.readAsArrayBuffer(file);
+}
+function loadJSZip(buf){
+  if(typeof JSZip!=='undefined'){ doDocxParse(buf); return; }
+  setStatus('Loading docx parser…','loading');
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+  s.onload=function(){ doDocxParse(buf); };
+  s.onerror=function(){ setStatus('Could not load JSZip','error'); };
+  document.head.appendChild(s);
+}
+function doDocxParse(buf){
+  JSZip.loadAsync(buf).then(function(zip){
+    var docP = zip.file('word/document.xml').async('string');
+    var fnP  = zip.file('word/footnotes.xml') ? zip.file('word/footnotes.xml').async('string') : Promise.resolve('');
+    Promise.all([docP, fnP]).then(function(res){
+      var docXml=res[0], fnXml=res[1];
+      var result = extractDocxText(docXml, fnXml);
+      currentSampleKey='__docx__';
+      // Store the footnote map for the parser
+      FOOTNOTES['__docx__'] = result.symMap;
+      document.getElementById('inputText').value = result.text;
+      parseText();
+    });
+  }).catch(function(e){ setStatus('DOCX parse error: '+e,'error'); });
+}
+
+// ── Wingdings → Unicode symbol map ──
+var WINGDINGS_MAP = {
+  'Wingdings':   {0x22:'✂',0x26:'✆',0x34:'✏',0x36:'✒',0x6C:'✦',0x70:'✰',0x72:'✵',0x75:'❇',0xA1:'●',0xA5:'❖',0xC4:'✤',0xD0:'★',0xD6:'✿',0xD8:'✲',0xFC:'▶'},
+  'Wingdings 2': {0x52:'☛',0x9B:'✺',0xDF:'⬟'},
+  'Wingdings 3': {0x65:'▶',0x77:'▻',0x7D:'⟹',0x7E:'⊳',0x96:'⊕',0xB3:'⊿',0xC5:'⊙'},
+  'Monotype Sorts':{0x23:'#',0x2A:'∗',0x32:'②',0xA6:'¦',0xA9:'©'},
+  'Symbol':      {0xC5:'⊗'},
+  'Webdings':    {0x64:'★',0x90:'⊞'}
+};
+function symToUnicode(font, charHex){
+  var code = parseInt(charHex, 16) & 0xFF;
+  var m = WINGDINGS_MAP[font];
+  return (m && m[code]) ? m[code] : '';
+}
+
+function extractDocxText(docXml, fnXml){
+  // ── 1. Build footnote id → {sym, text} from footnotes.xml ──
+  var fnData = {};  // id → {sym, text}
+  if(fnXml){
+    var fnEntries = fnXml.match(/<w:footnote[^>]*w:id="(\d+)"[^>]*>[\s\S]*?<\/w:footnote>/g) || [];
+    fnEntries.forEach(function(entry){
+      var idM = entry.match(/w:id="(\d+)"/); if(!idM) return;
+      var id = idM[1];
+      // Get symbol from first w:sym in this footnote
+      var symM = entry.match(/<w:sym w:font="([^"]+)" w:char="([^"]+)"/);
+      var sym = symM ? symToUnicode(symM[1], symM[2]) : '';
+      // Get text content (strip XML tags)
+      var txt = entry.replace(/<w:sym[^>]*\/>/g,'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+      fnData[id] = {sym: sym, text: txt};
+    });
+  }
+
+  // ── 2. Build symMap: sym → "sym text" (for FOOTNOTES lookup) ──
+  var symMap = {};
+  Object.keys(fnData).forEach(function(id){
+    var d = fnData[id];
+    if(!d.sym || !d.text) return;
+    var remark = d.sym + ' ' + d.text;
+    if(!symMap[d.sym]) symMap[d.sym] = remark;
+    else if(symMap[d.sym].indexOf(remark) < 0) symMap[d.sym] += '\n' + remark;
+  });
+
+  // ── 3. Extract body text, injecting symbols at footnote reference points ──
+  // Process paragraph by paragraph
+  var paras = docXml.match(/<w:p[ >][\s\S]*?<\/w:p>/g) || [];
+  var lines = [];
+  paras.forEach(function(para){
+    // Skip headers/footers if inside w:hdr or w:ftr (we won't encounter these in p-level match)
+    var paraText = '';
+    // Get runs in order
+    var runs = para.match(/<w:r[ >][\s\S]*?<\/w:r>/g) || [];
+    runs.forEach(function(run){
+      // Check for footnote reference with sym (customMarkFollows pattern)
+      var fnRef = run.match(/w:footnoteReference[^>]*w:id="(\d+)"/);
+      var symInRun = run.match(/<w:sym w:font="([^"]+)" w:char="([^"]+)"/);
+      if(fnRef && symInRun){
+        // Inject the unicode symbol
+        paraText += symToUnicode(symInRun[1], symInRun[2]);
+      } else if(fnRef){
+        // footnote ref without inline sym — look up symbol from fnData
+        var sym = fnData[fnRef[1]] ? fnData[fnRef[1]].sym : '';
+        paraText += sym;
+      } else if(symInRun){
+        // standalone sym (e.g. amendment bullet at line start already handled)
+        paraText += symToUnicode(symInRun[1], symInRun[2]);
+      } else {
+        // Normal text runs
+        var texts = run.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+        texts.forEach(function(t){
+          var m = t.match(/<w:t[^>]*>([^<]*)<\/w:t>/);
+          if(m) paraText += m[1];
+        });
+      }
+    });
+    paraText = paraText.trim();
+    if(paraText) lines.push(paraText);
+    // Emit page-break sentinel AFTER paragraph that contains lastRenderedPageBreak
+    // so the NEXT paragraph is treated as a new-page start
+    if(para.indexOf('lastRenderedPageBreak')>=0 || para.indexOf('w:type=\"page\"')>=0){
+      lines.push('\x00PAGE_BREAK\x00');
+    }
+  });
+
+    // Normalize: ensure space after section number+dot (e.g. "१.संक्षिप्त" → "१. संक्षिप्त")
+  lines=lines.map(function(l){
+    return l.replace(/^([^\s(（]*[०-९\d][.।])([^\s])/, function(m,a,b){return a+' '+b;});
+  });
+  return { text: lines.join('\n'), symMap: symMap };
+}
+function readPdf(file){
+  // Use PDF.js from CDN
+  var r=new FileReader();
+  r.onload=function(e){
+    if(typeof pdfjsLib==='undefined'){
+      setStatus('Loading PDF parser…','loading');
+      var s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=function(){
+        pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        doPdf(e.target.result);
+      };
+      s.onerror=function(){ setStatus('Could not load PDF parser','error'); };
+      document.head.appendChild(s);
+    } else { doPdf(e.target.result); }
+  };
+  r.readAsArrayBuffer(file);
+}
+function doPdf(buf){
+  pdfjsLib.getDocument({data:buf}).promise.then(function(pdf){
+    var pages=[];
+    var loadPage=function(n){
+      return pdf.getPage(n).then(function(page){
+        return page.getTextContent().then(function(tc){
+          return tc.items.map(function(it){return it.str;}).join(' ');
+        });
+      });
+    };
+    var all=[];
+    for(var n=1;n<=pdf.numPages;n++) all.push(loadPage(n));
+    Promise.all(all).then(function(results){
+      document.getElementById('inputText').value=results.join('\n');
+      parseText();
+    });
+  }).catch(function(err){
+    setStatus('PDF read error: '+err,'error');
+  });
+}
+
+function addRow(){
+  var id=document.getElementById('newRowId').value.trim()||('new.'+(tableData.length+1));
+  tableData.push({id:id,law:'',remark1:'',remark2:'',amend:''});
+  document.getElementById('newRowId').value='';
+  renderTable();renderJson();
+  var last=document.getElementById('tableBody').lastElementChild;
+  if(last)last.scrollIntoView({behavior:'smooth',block:'nearest'});
+  setStatus('Row added',tableData.length+' rows');
+}
+function renderJson(){
+  var el=document.getElementById('jsonOut');
+  if(!tableData.length){el.innerHTML='// No data yet';return;}
+  var exp=tableData.map(function(r){return{id:r.id,law:r.law,remark1:r.remark1,remark2:r.remark2};});
+  el.innerHTML=syntaxHL(JSON.stringify(exp,null,2));
+}
+function syntaxHL(json){
+  return json.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,function(m){
+      var c='json-num';
+      if(/^"/.test(m))c=/:$/.test(m)?'json-key':'json-str';
+      else if(/true|false/.test(m))c='json-bool';
+      else if(/null/.test(m))c='json-null';
+      return '<span class="'+c+'">'+m+'</span>';
+    });
+}
+function switchTab(view,btn){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('.output-view').forEach(function(v){v.classList.remove('active');});
+  btn.classList.add('active');
+  document.getElementById('view-'+view).classList.add('active');
+  if(view==='json')renderJson();
+}
+function copyJson(){
+  var exp=tableData.map(function(r){return{id:r.id,law:r.law,remark1:r.remark1,remark2:r.remark2};});
+  navigator.clipboard.writeText(JSON.stringify(exp,null,2)).then(function(){
+    var m=document.getElementById('copyMsg');m.classList.add('show');
+    setTimeout(function(){m.classList.remove('show');},2000);
+  });
+}
+function clearAll(){
+  document.getElementById('inputText').value='';tableData=[];currentSampleKey='';selectedRow=-1;var oel=document.getElementById('outlineContent');if(oel){oel.innerHTML='';oel.className='outline-empty';oel.textContent='Parse a document to see section headings here.';};
+  document.querySelectorAll('.btn-sample').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('srcLabel').textContent='\u2014';
+  renderTable();renderJson();setStatus('Cleared','0 rows');
+}
+function setStatus(msg,type){
+  var sm=document.getElementById('statusMsg');
+  if(sm){
+    if(type==='loading') sm.style.color='var(--muted)';
+    else if(type==='error') sm.style.color='var(--red)';
+    else sm.style.color='var(--gold)';
+    sm.textContent=msg;
+    setTimeout(function(){if(sm) sm.style.color='';},3000);
+  }
+  upCounts(tableData.length);
+}
+function upCounts(n){var rc=document.getElementById('rowCount');if(rc)rc.textContent=n+' rows';}
+function warnIdEdit(input){
+  if(input._warned) return;
+  input._warned=true;
+  var warn=document.getElementById('idEditWarn');
+  if(!warn) return;
+  warn.classList.add('show');
+  clearTimeout(warn._t);
+  warn._t=setTimeout(function(){warn.classList.remove('show');},3500);
+}
+document.addEventListener('input',function(e){if(e.target.tagName==='TEXTAREA'&&e.target!==document.getElementById('inputText'))ar(e.target);});
+
+// ── Input panel toggle ──
+function toggleInputPanel(forceClose){
+  var panel=document.getElementById('inputPanel');
+  var btn=document.getElementById('toggleInputBtn');
+  if(!panel) return;
+  if(forceClose===true){
+    panel.classList.remove('open');
+    btn.classList.remove('active');
+  } else {
+    var open=panel.classList.toggle('open');
+    btn.classList.toggle('active', open);
+  }
+}
+
+// ── Build outline from tableData ──
+function buildOutline(){
+  var el=document.getElementById('outlineContent');
+  if(!el) return;
+  el.innerHTML=''; el.className='';
+  var reColon=/[ःः:]/;
+  var reStripNum=/^[^a-zA-Z\u0900-\u097F]*[\d०-९]+[क-ह]?[.।]\s*/;
+  var sections=[];
+  tableData.forEach(function(row,idx){
+    if(!row.id) return;
+    // Preamble
+    if(row.isPreamble){
+      var firstLine=(row.law||'').split('\n')[0].trim().slice(0,42);
+      sections.push({id:'pre', label:firstLine, rowIdx:idx, isChapter:false, isPreamble:true, isAnnex:false});
+      return;
+    }
+    // Chapter
+    if(row.isChapter){
+      sections.push({id:(row.chNum||row.id).trim(), label:row.chName||'', rowIdx:idx, isChapter:true, isPreamble:false, isAnnex:false});
+      return;
+    }
+    // Annex
+    if(row.isAnnex){
+      var firstLine=(row.law||'').split('\n')[0].trim().slice(0,50);
+      sections.push({id:row.id, label:firstLine, rowIdx:idx, isChapter:false, isPreamble:false, isAnnex:true});
+      return;
+    }
+    // Regular top-level section only (no dot, no spl/_copy)
+    if(row.id.indexOf('.')>=0) return;
+    if(/spl|_copy/.test(row.id)) return;
+    if(!reColon.test(row.law)) return;
+    var m=row.law.match(/^(.*?[ःः:])/);
+    if(!m) return;
+    var label=m[1].replace(reStripNum,'').replace(/[ःः:]\s*$/,'').trim();
+    if(!label) return;
+    sections.push({id:row.id, label:label, rowIdx:idx, isChapter:false, isPreamble:false, isAnnex:false});
+  });
+  if(!sections.length){
+    el.className='outline-empty';
+    el.textContent='Parse a document to see sections here.';
+    return;
+  }
+  var ul=document.createElement('ul');
+  ul.className='outline-list';
+  sections.forEach(function(sec){
+    var li=document.createElement('li');
+    var cls='outline-item';
+    if(sec.isChapter)  cls+=' chapter';
+    if(sec.isPreamble) cls+=' preamble';
+    if(sec.isAnnex)    cls+=' annex';
+    li.className=cls;
+    li.innerHTML='<span class="outline-id">'+esc(sec.id)+'</span>'
+      +'<span class="outline-sep"> · </span>'
+      +'<span class="outline-title">'+esc(sec.label)+'</span>';
+    li.title=sec.id+(sec.label?' — '+sec.label:'');
+    li.onclick=function(){
+      document.querySelectorAll('.outline-item').forEach(function(x){x.classList.remove('active');});
+      li.classList.add('active');
+      var tv=document.getElementById('view-table');
+      if(tv&&!tv.classList.contains('active')){
+        switchTab('table',document.querySelector('#tab-table'));
+      }
+      var trs=document.querySelectorAll('#tableBody tr');
+      var tr=trs[sec.rowIdx];
+      if(tr){
+        selectedRow=sec.rowIdx;
+        tr.scrollIntoView({behavior:'smooth',block:'center'});
+        tr.classList.add('selected-row');
+        setTimeout(function(){tr&&tr.classList.remove('selected-row');},1800);
+      }
+    };
+    ul.appendChild(li);
+  });
+  el.appendChild(ul);
+  rerunNavSearch();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+;
+
+// ════════════════════════════════════════════════════════════
+// INPUT MODE + JSON TABLE IMPORT + HISTORY
+// ════════════════════════════════════════════════════════════
+
+function switchInpMode(mode){
+  INPUT_MODE = mode;
+  var txtTab  = document.getElementById('inpTabText');
+  var jsonTab = document.getElementById('inpTabJson');
+  var hint    = document.getElementById('inpModeHint');
+  var parseBtn= document.getElementById('parseBtn');
+  var ta      = document.getElementById('inputText');
+  if(mode==='json'){
+    if(txtTab)  txtTab.classList.remove('active');
+    if(jsonTab) jsonTab.classList.add('active');
+    if(hint)    hint.textContent='JSON array of row objects → loaded directly';
+    if(parseBtn)parseBtn.textContent='→ Load JSON';
+    if(ta)      ta.placeholder='[\n  {\n    "id": "\\u0967",\n    "law": "...",\n    "remark1": "",\n    "remark2": "",\n    "amend": ""\n  },\n  ...\n]';
+  } else {
+    if(jsonTab) jsonTab.classList.remove('active');
+    if(txtTab)  txtTab.classList.add('active');
+    if(hint)    hint.textContent='Legal text → parsed automatically';
+    if(parseBtn)parseBtn.textContent='→ Parse to Table';
+    if(ta)      ta.placeholder='Paste or drop legal text here (English or Nepali)\n\nAmendment markers: ⊕ or * prefix';
+  }
+}
+
+// ── JSON Table Import ──
+// Accepted formats:
+//  A) Array of row objects: [{id, law, remark1, remark2, amend, ...}, ...]
+//  B) Object with "rows" key: {rows:[...], ...}
+//  C) Exported JSON from this tool (same structure as tableData)
+function loadJsonTable(raw){
+  var parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch(e){
+    setStatus('JSON parse error: '+e.message, 'error');
+    return;
+  }
+  // Normalise to array
+  var arr = Array.isArray(parsed) ? parsed
+          : (parsed && Array.isArray(parsed.rows)) ? parsed.rows
+          : null;
+  if(!arr || !arr.length){
+    setStatus('JSON must be an array of row objects','error');
+    return;
+  }
+  // Map each object → tableData row, filling defaults
+  var rows = arr.map(function(obj){
+    return {
+      id:       String(obj.id      || obj.ID       || ''),
+      law:      String(obj.law     || obj.text      || obj.content || obj.law || ''),
+      remark1:  String(obj.remark1 || obj.remarks   || obj.remark  || ''),
+      remark2:  String(obj.remark2 || obj.amendment || ''),
+      amend:    String(obj.amend   || obj.amendmentMarker || ''),
+      // Optional structural flags
+      isChapter:      !!(obj.isChapter),
+      isPreamble:     !!(obj.isPreamble),
+      isAnnex:        !!(obj.isAnnex),
+      isSectionHeading:!!(obj.isSectionHeading),
+      chNum:    String(obj.chNum   || ''),
+      chName:   String(obj.chName  || '')
+    };
+  });
+  tableData = rows;
+  renderTable(); renderJson();
+  setStatus('Loaded '+rows.length+' rows from JSON');
+  saveToHistory(raw, 'json');
+  toggleInputPanel(true);
+}
+
+// ── Input History (max 3, stored in memory only) ──
+function saveToHistory(raw, mode){
+  if(!raw || raw.length<5) return;
+  var label = _histLabel(raw, mode);
+  // Remove duplicate
+  INPUT_HISTORY = INPUT_HISTORY.filter(function(h){ return h.text !== raw; });
+  INPUT_HISTORY.unshift({label:label, text:raw, mode:mode, ts:Date.now()});
+  if(INPUT_HISTORY.length>3) INPUT_HISTORY=INPUT_HISTORY.slice(0,3);
+  renderInputHistory();
+}
+
+function _histLabel(raw, mode){
+  if(mode==='json'){
+    // Count items
+    var n=0; try{ var a=JSON.parse(raw); n=Array.isArray(a)?a.length:(a&&a.rows?a.rows.length:0); }catch(e){}
+    return 'JSON ('+n+' rows)';
+  }
+  // Plain text: first non-empty line, max 38 chars
+  var first = raw.split('\n').map(function(l){return l.trim();}).filter(Boolean)[0]||'';
+  return first.length>38 ? first.slice(0,38)+'…' : first;
+}
+
+function renderInputHistory(){
+  var bar   = document.getElementById('inpHistoryBar');
+  var pills = document.getElementById('inpHistoryPills');
+  if(!bar||!pills) return;
+  if(!INPUT_HISTORY.length){ bar.style.display='none'; return; }
+  bar.style.display='flex';
+  pills.innerHTML='';
+  INPUT_HISTORY.forEach(function(h,i){
+    var btn = document.createElement('button');
+    btn.className='inp-hist-pill'+(h.mode==='json'?' json-pill':'');
+    btn.title = h.label+(h.mode==='json'?' [JSON]':' [Text]')+' · click to restore';
+    btn.innerHTML = '<span class="pill-badge">'+(h.mode==='json'?'{}':'T')+'</span>'
+                  + '<span class="pill-text">'+_hEsc(h.label)+'</span>';
+    btn.onclick = function(){
+      document.getElementById('inputText').value = h.text;
+      switchInpMode(h.mode);
+      if(h.mode==='json') loadJsonTable(h.text);
+      else parseText();
+    };
+    pills.appendChild(btn);
+  });
+}
+
+function clearInputHistory(){
+  INPUT_HISTORY=[];
+  renderInputHistory();
+}
+
+// ════════════════════════════════════════════════════════════
+// NEPALI NORMALIZER
+// ════════════════════════════════════════════════════════════
+var NepaliNormalizer = {
+  vowelMap:   { 'ी': 'ि', 'ू': 'ु' },
+  sibilantMap:{ 'श': 'स', 'ष': 'स' },
+  nasalMap:   { 'ङ': 'न', 'ण': 'न', 'ञ': 'न', 'ं': 'न्' },
+  vaBaMap:    { 'व': 'ब' },
+  normalize: function(text) {
+    if (!text) return '';
+    var n = String(text).normalize('NFC').replace(/\u200D/g,'').replace(/\u200C/g,'');
+    var maps = [this.vowelMap, this.sibilantMap, this.nasalMap, this.vaBaMap];
+    for (var mi=0; mi<maps.length; mi++){
+      var map = maps[mi];
+      for (var f in map){ if(map.hasOwnProperty(f)) n = n.split(f).join(map[f]); }
+    }
+    return n;
+  },
+  isDevanagari: function(text){ return /[\u0900-\u097F]/.test(text); },
+  mapToOriginal: function(normPos, original, normalized){
+    if (normPos<=0) return 0;
+    if (normPos>=normalized.length) return original.length;
+    var origIdx=0, normIdx=0;
+    while(normIdx<normPos && origIdx<original.length){
+      if(original[origIdx]==='\u200D'||original[origIdx]==='\u200C'){origIdx++;continue;}
+      origIdx++; normIdx++;
+    }
+    while(origIdx<original.length&&(original[origIdx]==='\u200D'||original[origIdx]==='\u200C')) origIdx++;
+    return origIdx;
+  }
+};
+
+// ════════════════════════════════════════════════════════════
+// SEARCH — table search with filter / normalizer / truncate
+// ════════════════════════════════════════════════════════════
+var _S = { term:'', matches:[], cursor:-1, active:false };
+
+function _sEsc(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function _hEsc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Check if field matches term (with optional normalizer)
+function _sMatches(fieldVal, term, useNorm){
+  var h = String(fieldVal||''), n = term;
+  if(useNorm && NepaliNormalizer.isDevanagari(h+n)){
+    h = NepaliNormalizer.normalize(h); n = NepaliNormalizer.normalize(n);
+  }
+  return h.toLowerCase().indexOf(n.toLowerCase()) >= 0;
+}
+
+// Build full highlighted HTML for a value (all occurrences)
+function _hlVal(val, term, useNorm){
+  var text = String(val||'');
+  if(!text || !term) return _hEsc(text);
+  var segs = [];
+  if(useNorm && NepaliNormalizer.isDevanagari(text+term)){
+    var normText = NepaliNormalizer.normalize(text);
+    var normTerm = NepaliNormalizer.normalize(term).toLowerCase();
+    var nLow = normText.toLowerCase();
+    var pos = 0;
+    while(pos <= normText.length){
+      var found = nLow.indexOf(normTerm, pos);
+      if(found < 0){ segs.push({t:text.slice(NepaliNormalizer.mapToOriginal(pos,text,normText)), hl:false}); break; }
+      var os = NepaliNormalizer.mapToOriginal(found, text, normText);
+      var oe = NepaliNormalizer.mapToOriginal(found+normTerm.length, text, normText);
+      var prevOs = NepaliNormalizer.mapToOriginal(pos, text, normText);
+      if(os > prevOs) segs.push({t:text.slice(prevOs,os), hl:false});
+      segs.push({t:text.slice(os,oe), hl:true});
+      pos = found + normTerm.length;
+      if(normTerm.length===0) break;
+    }
+  } else {
+    var low = text.toLowerCase(), lt = term.toLowerCase();
+    var p2 = 0;
+    while(p2 <= text.length){
+      var f2 = low.indexOf(lt, p2);
+      if(f2 < 0){ segs.push({t:text.slice(p2), hl:false}); break; }
+      if(f2 > p2) segs.push({t:text.slice(p2,f2), hl:false});
+      segs.push({t:text.slice(f2, f2+term.length), hl:true});
+      p2 = f2 + term.length;
+      if(term.length===0) break;
+    }
+  }
+  return segs.map(function(s){ return s.hl?'<mark class="sh">'+_hEsc(s.t)+'</mark>':_hEsc(s.t); }).join('');
+}
+
+// Excerpt: ±45 chars around first match, then highlight
+function _excerptHL(val, term, useNorm){
+  var text = String(val||'');
+  if(!text) return '';
+  var normText = (useNorm && NepaliNormalizer.isDevanagari(text+term))
+    ? NepaliNormalizer.normalize(text) : text;
+  var normTerm = (useNorm && NepaliNormalizer.isDevanagari(text+term))
+    ? NepaliNormalizer.normalize(term).toLowerCase() : term.toLowerCase();
+  var idx = normText.toLowerCase().indexOf(normTerm);
+  if(idx < 0) return _hlVal(text, term, useNorm);
+  var origIdx = (useNorm && NepaliNormalizer.isDevanagari(text+term))
+    ? NepaliNormalizer.mapToOriginal(idx, text, normText) : idx;
+  var lo = Math.max(0, origIdx-45), hi = Math.min(text.length, origIdx+term.length+45);
+  var snip = (lo>0?'…':'')+text.slice(lo,hi)+(hi<text.length?'…':'');
+  return _hlVal(snip, term, useNorm);
+}
+
+// Render one matched row (read-only highlighted)
+function _renderMatchRow(row, i){
+  var term    = _S.term;
+  var useNorm = !!(document.getElementById('chkNepali') && document.getElementById('chkNepali').checked);
+  var doTrunc = !!(document.getElementById('chkTruncate') && document.getElementById('chkTruncate').checked);
+  var isCur   = (_S.cursor>=0 && _S.matches[_S.cursor] && _S.matches[_S.cursor].rowIdx===i);
+
+  function cell(val, canTrunc, mono, muted){
+    val = String(val||'');
+    var hl = (canTrunc && doTrunc) ? _excerptHL(val, term, useNorm) : _hlVal(val, term, useNorm);
+    var cls = 'sh-cell-text'+(mono?' sh-mono':'')+(muted?' sh-muted':'');
+    return '<span class="'+cls+'">'+hl+'</span>';
+  }
+
+  var rowCls = 'sh-match-row'+(isCur?' sh-cur-row':'');
+  if(row.isSectionHeading) rowCls += ' heading-row';
+  if(row.amend) rowCls += ' has-amend';
+
+  if(row.isChapter){
+    return '<tr class="'+rowCls+' chapter-row" data-i="'+i+'" onclick="_hitRow('+i+')">'+
+      '<td colspan="6"><div class="chapter-band">'+
+        '<span class="chapter-num">'+cell(row.chNum,false)+'</span>'+
+        (row.chName?'<span class="chapter-name">'+cell(row.chName,true)+'</span>':'')+
+      '</div></td></tr>';
+  }
+  if(row.isPreamble||row.isAnnex){
+    return '<tr class="'+rowCls+' '+(row.isPreamble?'preamble-row':'annex-row')+
+      '" data-i="'+i+'" onclick="_hitRow('+i+')">'+
+      '<td><span class="row-num">'+(i+1)+'</span></td>'+
+      '<td><span class="sh-id sh-mono">'+cell(row.id,false,true)+'</span></td>'+
+      '<td colspan="3"><div class="sh-pre-wrap">'+cell(row.law,true)+'</div></td>'+
+      '<td></td></tr>';
+  }
+  return '<tr class="'+rowCls+'" data-i="'+i+'" onclick="_hitRow('+i+')">'+
+    '<td><span class="row-num">'+(i+1)+'</span></td>'+
+    '<td><span class="sh-id sh-mono">'+cell(row.id,false,true)+'</span></td>'+
+    '<td>'+cell(row.law,true)+'</td>'+
+    '<td>'+cell(row.remark1||'',false,true,true)+'</td>'+
+    '<td>'+cell(row.remark2||'',false)+'</td>'+
+    '<td></td></tr>';
+}
+
+// Apply search to DOM
+function _sApply(){
+  var term    = _S.term;
+  var useNorm = !!(document.getElementById('chkNepali') && document.getElementById('chkNepali').checked);
+  var doFilter= !!(document.getElementById('chkFilter') && document.getElementById('chkFilter').checked);
+
+  _S.matches = [];
+  tableData.forEach(function(row,i){
+    var fields = [row.id||'',row.law||'',row.remark1||'',row.remark2||'',row.chNum||'',row.chName||''];
+    if(fields.some(function(f){ return _sMatches(f, term, useNorm); }))
+      _S.matches.push({rowIdx:i});
+  });
+
+  if(!_S.matches.length){ _sUpdCount(); return; }
+  _S.cursor = 0;
+
+  var tbody = document.getElementById('tableBody');
+  if(!tbody) return;
+  var matchSet = {};
+  _S.matches.forEach(function(m){ matchSet[m.rowIdx]=true; });
+
+  tbody.querySelectorAll('tr[data-i]').forEach(function(tr){
+    var idx = parseInt(tr.getAttribute('data-i'),10);
+    if(matchSet[idx]){
+      var newHtml = _renderMatchRow(tableData[idx], idx);
+      var tmp = document.createElement('tbody');
+      tmp.innerHTML = newHtml;
+      tr.parentNode.replaceChild(tmp.firstChild, tr);
+    } else {
+      if(doFilter) tr.style.display='none';
+    }
+  });
+
+  _sScrollTo(0);
+  _sUpdCount();
+}
+
+function _sScrollTo(ci){
+  if(ci<0||ci>=_S.matches.length) return;
+  var idx = _S.matches[ci].rowIdx;
+  var tbody = document.getElementById('tableBody');
+  if(!tbody) return;
+  var tr = tbody.querySelector('tr[data-i="'+idx+'"]');
+  if(tr) tr.scrollIntoView({block:'nearest',behavior:'smooth'});
+  tbody.querySelectorAll('.sh-match-row').forEach(function(r){
+    r.classList.toggle('sh-cur-row', parseInt(r.getAttribute('data-i'),10)===idx);
+  });
+}
+
+function _hitRow(rowIdx){
+  clearSearch();
+  setTimeout(function(){
+    var tr = document.querySelector('#tableBody tr[data-i="'+rowIdx+'"]');
+    if(tr) tr.scrollIntoView({block:'center',behavior:'smooth'});
+    selectRow(rowIdx);
+  },50);
+}
+
+function _sUpdCount(){
+  var el=document.getElementById('searchCount');
+  var prv=document.getElementById('searchPrev');
+  var nxt=document.getElementById('searchNext');
+  var n=_S.matches.length;
+  if(!_S.term){ el.textContent=''; el.className='search-count'; prv.disabled=true; nxt.disabled=true; return; }
+  if(n===0){ el.textContent='No match'; el.className='search-count no-results'; prv.disabled=true; nxt.disabled=true; return; }
+  el.textContent=(_S.cursor+1)+' / '+n;
+  el.className='search-count has-results';
+  prv.disabled=n<=1; nxt.disabled=n<=1;
+}
+
+// ── Public API ──
+function liveSearch(){
+  var raw=(document.getElementById('searchInput').value||'').trim();
+  clearSearch(true);
+  _S.term=raw;
+  document.getElementById('searchClear').style.display=raw?'':'none';
+  if(!raw){ _sUpdCount(); return; }
+  _S.active=true;
+  _sApply();
+}
+
+function searchNav(dir){
+  if(!_S.matches.length) return;
+  _S.cursor=(_S.cursor+dir+_S.matches.length)%_S.matches.length;
+  _sScrollTo(_S.cursor);
+  _sUpdCount();
+}
+
+function searchKeyNav(e){
+  if(e.key==='Enter'){ e.shiftKey?searchNav(-1):searchNav(1); e.preventDefault(); }
+  else if(e.key==='Escape'){ clearSearch(); }
+}
+
+function clearSearch(keepInput){
+  if(!keepInput){
+    var inp=document.getElementById('searchInput');
+    if(inp) inp.value='';
+    var cb=document.getElementById('searchClear');
+    if(cb) cb.style.display='none';
+  }
+  _S.term=''; _S.matches=[]; _S.cursor=-1;
+  if(_S.active){ _S.active=false; renderTable(); return; }
+  _sUpdCount();
+}
+
+// Toggle ⋮ options panel
+function toggleSearchOpts(){
+  var p=document.getElementById('searchOptsPanel');
+  if(!p) return;
+  var vis=p.style.display==='none'||p.style.display==='';
+  p.style.display=vis?'flex':'none';
+  document.getElementById('searchOptBtn').classList.toggle('active',vis);
+}
+
+// Reset1: clear search input + uncheck all opts (except truncate stays checked)
+function resetSearch1(){
+  clearSearch();
+  var ids=['chkFilter','chkNepali'];
+  ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.checked=false; });
+  var tc=document.getElementById('chkTruncate'); if(tc) tc.checked=true;
+  // close panel
+  var p=document.getElementById('searchOptsPanel');
+  if(p) p.style.display='none';
+  document.getElementById('searchOptBtn').classList.remove('active');
+}
+
+// Keyboard shortcut Ctrl/Cmd+F
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='f'){
+    e.preventDefault();
+    var inp=document.getElementById('searchInput');
+    if(inp){ inp.focus(); inp.select(); }
+  }
+});
+
+// Close opts panel when clicking outside
+document.addEventListener('click',function(e){
+  var btn=document.getElementById('searchOptBtn');
+  var pan=document.getElementById('searchOptsPanel');
+  if(pan&&btn&&!pan.contains(e.target)&&!btn.contains(e.target)&&
+     e.target.id!=='resetSearchBtn'){
+    pan.style.display='none'; btn.classList.remove('active');
+  }
+  var nbtn=document.getElementById('navOptBtn');
+  var npan=document.getElementById('navOptsPanel');
+  if(npan&&nbtn&&!npan.contains(e.target)&&!nbtn.contains(e.target)&&
+     e.target.id!=='resetNavBtn'){
+    npan.style.display='none'; nbtn.classList.remove('active');
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// NAV PANEL SEARCH — independent outline search
+// ════════════════════════════════════════════════════════════
+var _NS = { term:'', matches:[], cursor:-1 };  // matches = [{li, origDisplay}]
+
+function navSearch(){
+  var raw=(document.getElementById('navSearchInput').value||'').trim();
+  _nsClear(true);
+  _NS.term=raw;
+  document.getElementById('navClear').style.display=raw?'':'none';
+
+  var useNorm=!!(document.getElementById('navChkNepali')&&document.getElementById('navChkNepali').checked);
+  var doFilter=!!(document.getElementById('navChkFilter')&&document.getElementById('navChkFilter').checked);
+
+  var ul=document.querySelector('#outlineContent .outline-list');
+  if(!ul){ _nsUpdCount(); return; }
+
+  if(!raw){
+    // Show all
+    ul.querySelectorAll('li.outline-item').forEach(function(li){ li.style.display=''; _nsRestoreItem(li); });
+    _nsUpdCount(); return;
+  }
+
+  _NS.matches=[];
+  ul.querySelectorAll('li.outline-item').forEach(function(li){
+    // Search in ID + title text
+    var idEl=li.querySelector('.outline-id');
+    var titleEl=li.querySelector('.outline-title');
+    var idTxt=(idEl?idEl.textContent:'');
+    var titleTxt=(titleEl?titleEl.textContent:'');
+    var combined=idTxt+' '+titleTxt;
+    var hit=_sMatches(combined, raw, useNorm);
+    if(hit){
+      li.style.display='';
+      // Highlight
+      if(idEl){
+        idEl.dataset.origHtml=idEl.innerHTML;
+        idEl.innerHTML=_hlVal(idTxt, raw, useNorm);
+      }
+      if(titleEl){
+        titleEl.dataset.origHtml=titleEl.innerHTML;
+        titleEl.innerHTML=_hlVal(titleTxt, raw, useNorm);
+      }
+      _NS.matches.push({li:li});
+    } else {
+      if(doFilter) li.style.display='none';
+    }
+  });
+
+  if(_NS.matches.length){
+    _NS.cursor=0;
+    _nsSetCur(0);
+  }
+  _nsUpdCount();
+}
+
+function _nsRestoreItem(li){
+  li.querySelectorAll('[data-orig-html]').forEach(function(el){
+    el.innerHTML=el.dataset.origHtml; delete el.dataset.origHtml;
+  });
+  li.classList.remove('ns-cur');
+}
+
+function _nsClear(keepInput){
+  if(!keepInput){
+    var inp=document.getElementById('navSearchInput');
+    if(inp) inp.value='';
+    var cb=document.getElementById('navClear');
+    if(cb) cb.style.display='none';
+  }
+  // Restore all items
+  var ul=document.querySelector('#outlineContent .outline-list');
+  if(ul) ul.querySelectorAll('li.outline-item').forEach(function(li){
+    li.style.display=''; _nsRestoreItem(li);
+  });
+  _NS.term=''; _NS.matches=[]; _NS.cursor=-1;
+  _nsUpdCount();
+}
+
+function _nsSetCur(ci){
+  _NS.matches.forEach(function(m,i){ m.li.classList.toggle('ns-cur',i===ci); });
+  if(ci>=0&&ci<_NS.matches.length){
+    _NS.matches[ci].li.scrollIntoView({block:'nearest',behavior:'smooth'});
+  }
+}
+
+function _nsUpdCount(){
+  var el=document.getElementById('navSearchCount');
+  var prv=document.getElementById('navPrev');
+  var nxt=document.getElementById('navNext');
+  var n=_NS.matches.length;
+  if(!_NS.term){ el.textContent=''; el.className='nav-search-count'; prv.disabled=true; nxt.disabled=true; return; }
+  if(n===0){ el.textContent='No match'; el.className='nav-search-count no-results'; prv.disabled=true; nxt.disabled=true; return; }
+  el.textContent=(_NS.cursor+1)+' / '+n;
+  el.className='nav-search-count has-results';
+  prv.disabled=n<=1; nxt.disabled=n<=1;
+}
+
+function navSearchNav(dir){
+  if(!_NS.matches.length) return;
+  _NS.cursor=(_NS.cursor+dir+_NS.matches.length)%_NS.matches.length;
+  _nsSetCur(_NS.cursor);
+  _nsUpdCount();
+}
+
+function navSearchKey(e){
+  if(e.key==='Enter'){ e.shiftKey?navSearchNav(-1):navSearchNav(1); e.preventDefault(); }
+  else if(e.key==='Escape'){ _nsClear(); }
+}
+
+function clearNavSearch(){ _nsClear(); }
+
+function toggleNavOpts(){
+  var p=document.getElementById('navOptsPanel');
+  if(!p) return;
+  var vis=p.style.display==='none'||p.style.display==='';
+  p.style.display=vis?'flex':'none';
+  document.getElementById('navOptBtn').classList.toggle('active',vis);
+}
+
+// Reset2: clear nav search + reset nav options
+function resetSearch2(){
+  _nsClear();
+  var ids=['navChkFilter','navChkNepali'];
+  ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.checked=false; });
+  var p=document.getElementById('navOptsPanel');
+  if(p) p.style.display='none';
+  document.getElementById('navOptBtn').classList.remove('active');
+}
+
+// Re-run nav search after outline rebuilds (called from buildOutline end)
+function rerunNavSearch(){
+  if(_NS.term) setTimeout(navSearch, 30);
+}
+
+
+// ════════════════════════════════════════════════════════════
+// LAW FILE REGISTRY — window.law* globals with {metadata, content}
+// ════════════════════════════════════════════════════════════
+
+// Scan window for any global that looks like a law file:
+// must have a .content array whose first item has an "id" or "law" field.
+// Works for any variable name — window.evidenceAct2031, window.lawX, etc.
+var _WINDOW_BASELINE=null;
+function _buildBaseline(){
+  if(_WINDOW_BASELINE) return;
+  _WINDOW_BASELINE={};
+  // Snapshot current keys before user files load — approximate with known list
+  ['window','document','location','navigator','history','screen','performance',
+   'console','alert','confirm','prompt','setTimeout','setInterval','clearTimeout',
+   'clearInterval','fetch','XMLHttpRequest','Promise','JSON','Math','Date','Array',
+   'Object','String','Number','Boolean','RegExp','Error','Map','Set','WeakMap',
+   'WeakSet','Symbol','Proxy','Reflect','addEventListener','removeEventListener',
+   'dispatchEvent','postMessage','requestAnimationFrame','cancelAnimationFrame',
+   'getComputedStyle','innerWidth','innerHeight','outerWidth','outerHeight',
+   'scrollX','scrollY','pageXOffset','pageYOffset','screenX','screenY',
+   'devicePixelRatio','indexedDB','localStorage','sessionStorage','crypto',
+   'customElements','Worker','Blob','File','FileReader','URL','URLSearchParams',
+   'FormData','Headers','Request','Response','Event','CustomEvent','MouseEvent',
+   'KeyboardEvent','MutationObserver','IntersectionObserver','ResizeObserver',
+   'AbortController','TextEncoder','TextDecoder','queueMicrotask','atob','btoa',
+   'decodeURI','encodeURI','decodeURIComponent','encodeURIComponent',
+   'isNaN','isFinite','parseInt','parseFloat','NaN','Infinity','undefined',
+   'eval','Function','globalThis','self','top','parent','frames','opener',
+   'closed','name','status','SAMPLES','FOOTNOTES','tableData','NepaliNormalizer',
+   'INPUT_MODE','INPUT_HISTORY','_S','_NS','_WINDOW_BASELINE','_buildBaseline',
+   'pdfjsLib','JSZip','WINGDINGS_MAP'].forEach(function(k){_WINDOW_BASELINE[k]=1;});
+}
+function _scanLawGlobals(){
+  _buildBaseline();
+  var found=[];
+  try{
+    Object.keys(window).forEach(function(k){
+      if(_WINDOW_BASELINE[k]) return;
+      if(typeof k!=='string'||k.length<2) return;
+      var v=window[k];
+      if(!v||typeof v!=='object'||Array.isArray(v)) return;
+      if(!Array.isArray(v.content)||!v.content.length) return;
+      var s=v.content[0];
+      if(!s||typeof s!=='object') return;
+      if(!('id' in s)&&!('law' in s)) return; // must look like a law row
+      found.push({key:k, obj:v});
+    });
+  }catch(e){}
+  return found;
+}
+
+// Populate the law files dropdown with sorted list
+function _populateLawFileDropdown(){
+  var select=document.getElementById('lawFileSelect');
+  if(!select) return;
+  var files=_scanLawGlobals();
+  // Sort files alphabetically by title
+  files.sort(function(a, b){
+    var titleA=(a.obj.metadata||{}).title_np||a.obj.metadata.title||a.obj.metadata.title_en||a.key;
+    var titleB=(b.obj.metadata||{}).title_np||b.obj.metadata.title||b.obj.metadata.title_en||b.key;
+    return titleA.localeCompare(titleB, 'ne');
+  });
+  // Clear existing options except the first one
+  while(select.options.length > 1){
+    select.remove(1);
+  }
+  // Add options for each law file
+  files.forEach(function(f){
+    var m=f.obj.metadata||{};
+    var title=m.title_np||m.title||m.title_en||f.key;
+    var opt=document.createElement('option');
+    opt.value=f.key;
+    opt.textContent=title;
+    select.appendChild(opt);
+  });
+}
+
+// Handle law file dropdown selection
+function handleLawFileSelect(){
+  var select=document.getElementById('lawFileSelect');
+  if(!select || !select.value) return;
+  loadLawFile(select.value);
+  select.value=''; // Reset dropdown after selection
+}
+
+// Toggle the Law Files panel open/closed
+function toggleLawFilePanel(){
+  var panel=document.getElementById('lfPanel');
+  var btn=document.getElementById('lawFileBtn');
+  if(!panel) return;
+  var open=panel.style.display==='none'||panel.style.display==='';
+  panel.style.display=open?'':'none';
+  if(btn) btn.classList.toggle('active', open);
+  if(open) _renderLfFound();
+}
+
+// Rescan and refresh the found-files section
+function rescanLawFiles(){
+  _renderLfFound();
+  _populateLawFileDropdown();
+  setStatus('Law files rescanned');
+}
+
+// Render the "found files" section inside the panel
+function _renderLfFound(){
+  var wrap=document.getElementById('lfFoundWrap');
+  if(!wrap) return;
+  var files=_scanLawGlobals();
+  if(!files.length){
+    _buildBaseline();
+    var candidates=[];
+    try{ Object.keys(window).forEach(function(k){
+      if(_WINDOW_BASELINE[k]) return;
+      var v=window[k];
+      if(v&&typeof v==='object'&&!Array.isArray(v)) candidates.push(k);
+    }); }catch(e){}
+    var hint=candidates.length
+      ? '<br><span style="color:var(--gold);font-size:.6rem">Globals found: <code>'+
+        candidates.map(function(k){
+          var v=window[k]; var c=v&&Array.isArray(v.content);
+          return k+'('+(c?v.content.length+' rows':'no .content[]')+')';
+        }).join(', ')+'</code></span>'
+      : '<br><span style="font-size:.6rem;color:var(--muted)">No non-built-in globals found. Check your &lt;script src&gt; loaded without errors.</span>';
+    wrap.innerHTML='<div class="lf-found-empty">No law files detected yet.'+hint+'</div>';
+    return;
+  }
+  wrap.innerHTML='';
+  var list=document.createElement('div');
+  list.className='lf-found-list';
+  var hd=document.createElement('div');
+  hd.className='lf-found-hd';
+  hd.textContent=files.length+' law file'+(files.length>1?'s':'')+' loaded — click to open:';
+  list.appendChild(hd);
+  files.forEach(function(f){
+    var m=f.obj.metadata||{};
+    var title=m.title_np||m.title||m.title_en||f.key;
+    var titleEn=(m.title_en&&m.title_en!==title)?m.title_en:'';
+    var short=m.short_title||m.shortTitle||'';
+    if(short===title) short='';
+    var desc=m.description||m.description_np||'';
+    var tags=[];
+    if(m.year_bs)  tags.push('BS '+m.year_bs);
+    if(m.year_ad)  tags.push('AD '+String(m.year_ad));
+    if(m.law_type) tags.push(m.law_type);
+    if(m.category) tags.push(m.category);
+    if(m.language) tags.push(m.language);
+    if(m.version)  tags.push('v'+m.version);
+    if(m.status)   tags.push(m.status);
+    tags.push(f.obj.content.length+' rows');
+    var btn=document.createElement('button');
+    btn.className='lf-file-btn';
+    btn.title='Load: '+title+(desc?' — '+desc.slice(0,80):'');
+    var infoSpan=document.createElement('span');
+    infoSpan.className='lf-file-info';
+    var nameSpan=document.createElement('span');
+    nameSpan.className='lf-file-name'; nameSpan.textContent=title;
+    infoSpan.appendChild(nameSpan);
+    if(titleEn){var s=document.createElement('span');s.className='lf-file-short';s.textContent=titleEn;infoSpan.appendChild(s);}
+    if(short){var s=document.createElement('span');s.className='lf-file-short';s.textContent=short;infoSpan.appendChild(s);}
+    if(tags.length){
+      var tWrap=document.createElement('span'); tWrap.className='lf-file-tags';
+      tags.forEach(function(t){var sp=document.createElement('span');sp.className='lf-file-tag';sp.textContent=t;tWrap.appendChild(sp);});
+      infoSpan.appendChild(tWrap);
+    }
+    if(desc){var s=document.createElement('span');s.className='lf-file-desc';s.textContent=desc.slice(0,120);infoSpan.appendChild(s);}
+    btn.appendChild(infoSpan);
+    btn.addEventListener('click',(function(key){return function(){loadLawFile(key);};})(f.key));
+    list.appendChild(btn);
+  });
+  wrap.appendChild(list);
+}
+
+function loadLawFile(globalKey){
+  var obj=window[globalKey];
+  if(!obj||!Array.isArray(obj.content)){
+    setStatus('Law file not found: '+globalKey,'error'); return;
+  }
+  var meta=obj.metadata||{};
+  var rows=obj.content.map(function(item){
+    return {
+      id:               String(item.id||''),
+      law:              String(item.law||item.text||item.content||''),
+      remark1:          String(item.remark1||item.remarks||''),
+      remark2:          String(item.remark2||''),
+      amend:            String(item.amend||item.amendmentMarker||''),
+      isChapter:        !!(item.isChapter),
+      isPreamble:       !!(item.isPreamble),
+      isAnnex:          !!(item.isAnnex),
+      isSectionHeading: !!(item.isSectionHeading),
+      chNum:            String(item.chNum||''),
+      chName:           String(item.chName||'')
+    };
+  });
+  tableData=rows;
+  currentSampleKey='';
+  // deactivate all sample buttons
+  document.querySelectorAll('.btn-sample,.btn-lawfile').forEach(function(b){b.classList.remove('active');});
+  // Mark this file active using a data attribute on the panel buttons
+  document.querySelectorAll('.lf-file-btn').forEach(function(b){b.classList.remove('active');});
+  // close the panel
+  var panel=document.getElementById('lfPanel');
+  if(panel) panel.style.display='none';
+  var btn=document.getElementById('lawFileBtn');
+  if(btn) btn.classList.remove('active');
+  // source label
+  var sl=document.getElementById('srcLabel');
+  if(sl) sl.textContent=(meta.short_title||meta.shortTitle||meta.title_np||meta.title||globalKey);
+  // metadata banner
+  _showLawFileMeta(meta, rows.length);
+  renderTable(); renderJson();
+  saveToHistory(JSON.stringify(obj.content),'json');
+  setStatus('Loaded '+rows.length+' rows — '+(meta.title||globalKey));
+  toggleInputPanel(true);
+}
+
+// Show metadata banner below the input panel
+function _showLawFileMeta(meta, rowCount){
+  var banner=document.getElementById('lawFileMeta');
+  if(!banner) return;
+  var titleMain=meta.title_np||meta.title||meta.title_en||'';
+  if(!titleMain){ banner.style.display='none'; return; }
+  var titleEn=(meta.title_en&&meta.title_en!==titleMain)?meta.title_en:'';
+  var short=meta.short_title||meta.shortTitle||'';
+  var fields=[];
+  fields.push('<span class="lmf-title">'+_hEsc(titleMain)+'</span>');
+  if(titleEn) fields.push('<span class="lmf-short">'+_hEsc(titleEn)+'</span>');
+  if(short&&short!==titleMain) fields.push('<span class="lmf-short">'+_hEsc(short)+'</span>');
+  if(meta.year_bs)      fields.push('<span class="lmf-tag">BS '+_hEsc(meta.year_bs)+'</span>');
+  if(meta.year_ad)      fields.push('<span class="lmf-tag">AD '+_hEsc(String(meta.year_ad))+'</span>');
+  if(meta.law_type)     fields.push('<span class="lmf-tag">'+_hEsc(meta.law_type)+'</span>');
+  if(meta.category)     fields.push('<span class="lmf-tag">'+_hEsc(meta.category)+'</span>');
+  if(meta.jurisdiction) fields.push('<span class="lmf-tag">'+_hEsc(meta.jurisdiction)+'</span>');
+  if(meta.language)     fields.push('<span class="lmf-tag">'+_hEsc(meta.language)+'</span>');
+  if(meta.status)       fields.push('<span class="lmf-tag">'+_hEsc(meta.status)+'</span>');
+  if(meta.version)      fields.push('<span class="lmf-tag">v'+_hEsc(meta.version)+'</span>');
+  fields.push('<span class="lmf-tag">'+rowCount+' rows</span>');
+  var updated=meta.last_updated||meta.lastUpdated||'';
+  if(updated) fields.push('<span class="lmf-upd">Updated: '+_hEsc(updated)+'</span>');
+  var srcHtml=meta.source?'&nbsp;&middot;&nbsp;<span class="lmf-src">'+_hEsc(meta.source)+'</span>':'';
+  var desc=meta.description||meta.description_np||'';
+  var descHtml=desc?'<div class="lmf-desc">'+_hEsc(desc)+'</div>':'';
+  banner.innerHTML='<div class="lmf-top">'+fields.join('')+srcHtml+'</div>'+descHtml;
+  var closeBtn=document.createElement('button');
+  closeBtn.className='lmf-close'; closeBtn.textContent='✕'; closeBtn.title='Dismiss';
+  closeBtn.onclick=function(){banner.style.display='none';};
+  banner.appendChild(closeBtn);
+  banner.style.display='';
+}
+
+// Close panel when clicking outside
+document.addEventListener('click',function(e){
+  var panel=document.getElementById('lfPanel');
+  var btn=document.getElementById('lawFileBtn');
+  if(panel&&btn&&panel.style.display!=='none'&&
+     !panel.contains(e.target)&&!btn.contains(e.target)){
+    panel.style.display='none';
+    btn.classList.remove('active');
+  }
+});
+
+
+</script>
+<!-- Add this anywhere in the <head> or before </body> of index.html -->
+<script src="evidence_act_2031.js"></script>
+<script src="company_act_2063.js"></script>
+<script src="constitutional_bench_rules_2072.js"></script>
+<script src="sample_law.js"></script>
+<script>
+// Initialize the law files dropdown when page loads
+document.addEventListener('DOMContentLoaded',function(){
+  _populateLawFileDropdown();
+});
+</script>
+<div id="idEditWarn" style="
+  position:fixed;bottom:2.8rem;left:50%;transform:translateX(-50%);
+  background:rgba(26,18,9,.92);color:#e8d9a0;
+  font-family:'JetBrains Mono',monospace;font-size:.67rem;
+  padding:.55rem 1.1rem;border-radius:3px;border:1px solid var(--gold);
+  pointer-events:none;opacity:0;transition:opacity .25s;white-space:nowrap;z-index:9999;
+  ">⚠ You are manually editing an auto-assigned ID — proceed carefully.</div></body>
+</html>
